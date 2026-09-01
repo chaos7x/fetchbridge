@@ -12,9 +12,19 @@
 # GNU General Public License for more details.
 
 import os
+import logging
 import shutil
 import inotify.adapters
 from pathlib import Path
+
+# Liest das Log-Level aus den Env-Vars (Standard: INFO)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 
 SOURCE_DIR = Path("/media/out")
 TARGET_DIR = Path("/media/in")
