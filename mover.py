@@ -29,105 +29,113 @@ logging.basicConfig(
 SOURCE_DIR = Path("/media/out")
 TARGET_DIR = Path("/media/in")
 
-# Erlaubte Video-Endungen (Streamlink + Tubesync)
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
-
-# Temporäre Download-Dateien strikt ignorieren
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
-
-# Relevante Kernel-Events
 WATCH_EVENTS = {'IN_MOVED_TO', 'IN_CLOSE_WRITE'}
 
 def is_writable(path: Path) -> bool:
     """Prüft, ob der Ordner beschreibbar ist (RW) oder Read-Only (RO) gemountet wurde."""
     parent = path.parent if path.is_file() else path
-    return os.access(parent, os.W_OK)
+    writable = os.access(parent, os.W_OK)
+    logging.debug(f"Mount-Prüfung für '{parent}': Writable={writable}")
+    return writable
 
 def cleanup_empty_dirs(path: Path):
     """Löscht leere Unterordner in RW-Mounts. Ignoriert RO-Mounts und Basis-Ordner."""
     if path == SOURCE_DIR or not path.is_relative_to(SOURCE_DIR):
+        logging.debug(f"Aufräumen übersprungen (Ausnahme/Basis-Ordner): {path}")
         return
-    
-    # Auf RO-Mounts erst gar nicht versuchen zu löschen
+
     if not is_writable(path):
+        logging.debug(f"Aufräumen übersprungen (RO-Mount): {path}")
         return
 
     try:
         current = path.parent if path.is_file() else path
-        # Stoppt direkt unterhalb von /media/out (z. B. /media/out/twitch)
         while current != SOURCE_DIR and current.parent != SOURCE_DIR and current.is_dir():
             if not any(current.iterdir()):
                 current.rmdir()
-                print(f"[INFO] 🧹 Leeres Verzeichnis entfernt: {current}", flush=True)
+                logging.info(f"🧹 Leeres Verzeichnis entfernt: {current}")
                 current = current.parent
             else:
+                logging.debug(f"Verzeichnis nicht leer, stoppe Aufräumen: {current}")
                 break
     except Exception as e:
-        print(f"[WARN] Fehler beim Aufräumen von {path}: {e}", flush=True)
+        logging.warning(f"Fehler beim Aufräumen von {path}: {e}")
 
 def process_file(filepath: Path):
     """Kopiert oder verschiebt die Datei basierend auf den Schreibrechten des Mounts."""
     if not filepath.is_file():
+        logging.debug(f"Ignoriere (Keine reguläre Datei oder existiert nicht mehr): {filepath}")
         return
 
     ext = filepath.suffix.lower()
 
     # Temp-Dateien und versteckte Dateien ignorieren
     if ext in TEMP_EXTENSIONS or filepath.name.startswith("."):
+        logging.debug(f"Ignoriere Temp/Versteckte Datei: {filepath.name}")
         return
 
     # Nur erlaubte Formate verarbeiten
     if ext not in ALLOWED_EXTENSIONS:
+        logging.debug(f"Ignoriere nicht unterstützte Endung '{ext}': {filepath.name}")
         return
 
     filename = filepath.name
     dest_path = TARGET_DIR / filename
 
-    # Namenskollisionen in /media/in vermeiden
+    # Namenskollisionen vermeiden
     counter = 1
     original_dest = dest_path
     while dest_path.exists():
         dest_path = TARGET_DIR / f"{original_dest.stem}_{counter}{original_dest.suffix}"
         counter += 1
+        logging.debug(f"Ziel existiert bereits. Neuer Name: {dest_path.name}")
 
     try:
-        # Dynamische Unterscheidung: RW -> move, RO -> copy
         if is_writable(filepath):
-            print(f"[INFO] 🚚 Verschiebe (RW): {filepath.name} -> {dest_path.name}", flush=True)
+            logging.info(f"🚚 Verschiebe (RW): {filepath.name} -> {dest_path.name}")
             shutil.move(str(filepath), str(dest_path))
-            print(f"[INFO] ✅ Verschieben erfolgreich: {dest_path.name}", flush=True)
+            logging.info(f"✅ Verschieben erfolgreich: {dest_path.name}")
             cleanup_empty_dirs(filepath)
         else:
-            print(f"[INFO] 📋 Kopiere (RO): {filepath.name} -> {dest_path.name}", flush=True)
+            logging.info(f"📋 Kopiere (RO): {filepath.name} -> {dest_path.name}")
             shutil.copy2(str(filepath), str(dest_path))
-            print(f"[INFO] ✅ Kopieren erfolgreich: {dest_path.name}", flush=True)
+            logging.info(f"✅ Kopieren erfolgreich: {dest_path.name}")
 
     except Exception as e:
-        print(f"[WARN] Fehler bei Verarbeitung von {filename}: {e}", flush=True)
+        logging.warning(f"Fehler bei Verarbeitung von {filename}: {e}")
 
 def scan_existing_files():
     """Verschiebt/Kopiert beim Container-Start bereits vorhandene fertige Dateien."""
-    print("[INFO] Scanne nach bereits vorhandenen fertigen Dateien...", flush=True)
+    logging.info("Scanne nach bereits vorhandenen fertigen Dateien...")
+    found_count = 0
     for ext in ALLOWED_EXTENSIONS:
         for filepath in SOURCE_DIR.rglob(f"*{ext}"):
+            found_count += 1
+            logging.debug(f"Scan hat Datei gefunden: {filepath}")
             process_file(filepath)
+    logging.debug(f"Initialer Scan beendet. {found_count} passende Datei(en) gescannt.")
 
 def main():
-    print("[INFO] Starte Inotify-Mover mit RO/RW-Erkennung...", flush=True)
+    logging.info("Starte Inotify-Mover mit RO/RW-Erkennung...")
 
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Start-Cleanup / Scan
     scan_existing_files()
 
-    # 2. Inotify-Überwachung
     i = inotify.adapters.InotifyTree(str(SOURCE_DIR))
+    logging.debug(f"InotifyTree Überwachung gestartet auf: {SOURCE_DIR}")
 
     for event in i.event_gen(yield_nones=False):
         (_, type_names, path, filename) = event
 
+        # Alle Inotify-Events im Debugging sichtbar machen
+        logging.debug(f"Inotify-Event empfangen: {type_names} für {path}/{filename}")
+
         if WATCH_EVENTS.intersection(type_names):
             full_path = Path(path) / filename
+            logging.debug(f"Relevantes Event {type_names} auf {filename} -> Starte Verarbeitung")
             process_file(full_path)
 
 if __name__ == "__main__":
