@@ -1,0 +1,60 @@
+services:
+  mediadog:
+    image: mediadog:1.0.0
+    container_name: mediadog
+    hostname: mediadog
+    user: "11107:11108"
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
+      - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+    volumes:
+      # Optionales App-Volume (bei Bedarf einkommentieren)
+      # - app:/app:ro
+      # Eingangs-Ordner aus dem streamlink-recorder
+      - storage-source:/media/out:rw
+      # Ausgangs-Ordner für den yt-upload
+      - storage-target:/media/in:rw
+
+# ==========================================
+# SEPARATE VOLUMES DEKLARATION
+# ==========================================
+volumes:
+  # --- App Volume (für externe mover.py / Skripte) ---
+  app:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/app
+
+  # --- Bind Mounts für Daten ---
+  storage-source:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/docker/streamlink-recorder/videos
+
+  storage-target:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/docker/yt-upload/videos/in
+
+  # --- Vorbereitung für spätere NFS-Mounts ---
+  # storage-source:
+  #   driver: local
+  #   driver_opts:
+  #     type: nfs
+  #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
+  #     device: ":/volume1/recordings/in"
+  #
+  # storage-target:
+  #   driver: local
+  #   driver_opts:
+  #     type: nfs
+  #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
+  #     device: ":/volume1/recordings/out"
