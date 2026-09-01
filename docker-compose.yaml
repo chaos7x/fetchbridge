@@ -27,7 +27,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${PWD}/app
+      device: ./app
 
   # --- Bind Mounts für Daten ---
   storage-source:
