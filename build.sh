@@ -32,7 +32,7 @@ if [ "$VERSION" != "dev" ]; then
 fi
 
 # Docker Build ausführen
-docker build -f Dockerfile.python \
+docker build -f Dockerfile \
   --build-arg VERSION="$VERSION" \
   --build-arg BUILD_DATE="$BUILD_DATE" \
   --pull \
