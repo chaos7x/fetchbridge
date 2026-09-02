@@ -81,7 +81,7 @@ if [ "$TARGET" = "registry" ]; then
 fi
 
 # 3. DOCKER-COMPOSE.YML PATCHEN & COMMITTEN (VOR DEM GIT-TAG!)
-COMPOSE_FILE="docker-compose.yml"
+COMPOSE_FILE="docker-compose.yaml"
 
 if [ -f "$COMPOSE_FILE" ]; then
   NEW_IMAGE="$LOCAL_IMAGE"
