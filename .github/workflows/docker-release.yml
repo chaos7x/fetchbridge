@@ -19,8 +19,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      packages: write
+      contents: write   # Erlaubt das Erstellen von Releases
+      packages: write   # Erlaubt das Pushen in die GitHub Container Registry
 
     steps:
       - name: Checkout Repository
@@ -57,6 +57,6 @@ jobs:
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
           name: Release ${{ inputs.version || github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: true  # Erstellt automatisch Changelog aus Commits/PRs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
