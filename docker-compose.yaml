@@ -1,6 +1,6 @@
 services:
   mediadog:
-    image: ghcr.io/chaos7x/mediadog:1.0.1
+    image: ghcr.io/chaos7x/mediadog:${IMAGE_VERSION:-latest}
     container_name: mediadog
     hostname: mediadog
     user: "11107:11108"
@@ -9,6 +9,8 @@ services:
       - TZ=Europe/Berlin
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
+    env_file:
+      - .env
     volumes:
       # Optionales App-Volume (bei Bedarf einkommentieren)
       # - app:/app:ro
