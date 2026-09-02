@@ -1,6 +1,6 @@
 services:
   mediadog:
-    image: mediadog:1.0.0
+    image: ghcr.io/chaos7x/mediadog:1.0.1
     container_name: mediadog
     hostname: mediadog
     user: "11107:11108"
