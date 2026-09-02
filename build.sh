@@ -39,18 +39,16 @@ REGISTRY_PREFIX="ghcr.io/chaos7x/${LOCAL_PREFIX}"
 LOCAL_IMAGE="$LOCAL_PREFIX:$VERSION"
 REGISTRY_IMAGE="$REGISTRY_PREFIX:$VERSION"
 
-# Prüfen, ob das Image lokal bereits existiert (gilt NICHT für 'dev'-Builds)
+# 1. IMAGE BAUEN (ODER LOKALES SKIPPEN)
 if [ "$VERSION" != "dev" ] && docker image inspect "$LOCAL_IMAGE" >/dev/null 2>&1; then
   echo "ℹ️ Lokales Release-Image '$LOCAL_IMAGE' wurde gefunden (Build wird übersprungen)."
 
-  # Falls das Ziel 'registry' ist, das lokale Image für GHCR retaggen
   if [ "$TARGET" = "registry" ]; then
     echo "🔗 Verlinke (tagge) lokales Image für die Registry..."
     docker tag "$LOCAL_IMAGE" "$REGISTRY_IMAGE"
     docker tag "$LOCAL_IMAGE" "$REGISTRY_PREFIX:latest"
   fi
 else
-  # Image existiert nicht ODER es ist eine 'dev'-Version -> Docker Build erzwingen
   if [ "$TARGET" = "registry" ]; then
     IMAGE_NAME="$REGISTRY_PREFIX"
   else
@@ -72,25 +70,51 @@ else
     "${TAGS[@]}" .
 fi
 
-# Falls als Ziel 'registry' übergeben wurde, Images pushen
+# 2. IMAGE PUSHEN (Falls Target = registry)
 if [ "$TARGET" = "registry" ]; then
   echo "🚀 Veröffentliche auf GitHub Container Registry..."
   docker push "$REGISTRY_IMAGE"
 
   if [ "$VERSION" != "dev" ]; then
     docker push "$REGISTRY_PREFIX:latest"
+  fi
+fi
 
-    # Optionalen Git-Tag erzeugen (nur bei Registry-Releases auf main)
-    read -p "Möchtest du auch den Git-Tag 'v${VERSION}' erstellen und pushen? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-        echo "⚠️ Git-Tag 'v${VERSION}' existiert bereits lokal."
-      else
-        git tag -a "v${VERSION}" -m "Release v${VERSION}"
-        git push origin "v${VERSION}"
-        echo "✅ Git-Tag 'v${VERSION}' erfolgreich gepusht!"
-      fi
+# 3. DOCKER-COMPOSE.YML PATCHEN & COMMITTEN (VOR DEM GIT-TAG!)
+COMPOSE_FILE="docker-compose.yml"
+
+if [ -f "$COMPOSE_FILE" ]; then
+  NEW_IMAGE="$LOCAL_IMAGE"
+  if [ "$TARGET" = "registry" ]; then
+    NEW_IMAGE="$REGISTRY_IMAGE"
+  fi
+
+  echo "📝 Aktualisiere $COMPOSE_FILE auf Image '$NEW_IMAGE'..."
+  sed -i -E "s|(image:\s*)[^[:space:]]+|\1${NEW_IMAGE}|" "$COMPOSE_FILE"
+
+  # Prüfen, ob durch sed eine Änderung entstanden ist
+  if [ -n "$(git status --porcelain "$COMPOSE_FILE")" ]; then
+    echo "💾 Committe geänderte $COMPOSE_FILE..."
+    git add "$COMPOSE_FILE"
+    git commit -m "chore(release): bump docker-compose image to ${NEW_IMAGE}"
+    git push origin "$CURRENT_BRANCH"
+    echo "✅ $COMPOSE_FILE erfolgreich auf '$CURRENT_BRANCH' gepusht!"
+  else
+    echo "ℹ️ $COMPOSE_FILE ist bereits auf dem aktuellen Stand."
+  fi
+fi
+
+# 4. ERST JETZT DEN GIT-TAG AUF DEN RELEASES-COMMIT SETZEN
+if [ "$TARGET" = "registry" ] && [ "$VERSION" != "dev" ]; then
+  read -p "Möchtest du den Git-Tag 'v${VERSION}' auf diesen Release-Commit setzen und pushen? (y/N): " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+      echo "⚠️ Git-Tag 'v${VERSION}' existiert bereits lokal."
+    else
+      git tag -a "v${VERSION}" -m "Release v${VERSION}"
+      git push origin "v${VERSION}"
+      echo "✅ Git-Tag 'v${VERSION}' zeigt jetzt exakt auf den Release-Commit inklusive der gepatchten Compose-Datei!"
     fi
   fi
 fi
