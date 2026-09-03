@@ -12,7 +12,7 @@ LABEL purpose="Directory monitoring and automated video moving"
 ENV PYTHONUNBUFFERED=1
 
 # ==========================================
-# STUFE 2: System-Pakete & Python-Inotify
+# LAYER 1: System-Pakete installieren
 # ==========================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcom-err2 \
@@ -20,27 +20,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mc \
     && rm -rf /var/lib/apt/lists/*
 
-# ==========================================
-# STUFE 4: Arbeitsverzeichnis & Mount-Pfade
-# ==========================================
+# Arbeitsverzeichnis setzen (Metadaten-Layer)
 WORKDIR /app
 
-# Die Standardpfade für in/out
-RUN mkdir -p /media/in /media/out /log && \
-    chmod 777 /media/in /media/out /log
+# ==========================================
+# LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
+# ==========================================
+RUN mkdir -p /media/in /media/out /log && chmod 777 /media/in /media/out /log
 
 # ==========================================
-# STUFE 5: Skripte kopieren & Rechte setzen
+# LAYER 3: Skripte & Configs kopieren, ausführen & verlinken
 # ==========================================
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY mover.py /usr/local/bin/mover
-
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover
-
-# Systemkonfiguration (.bashrc)
 COPY bashrc /etc/global.bashrc
-RUN ln -s /etc/global.bashrc /tmp/.bashrc && \
-    ln -s /etc/global.bashrc /app/.bashrc
+
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover \
+    && ln -s /etc/global.bashrc /tmp/.bashrc \
+    && ln -s /etc/global.bashrc /app/.bashrc
 
 ENV HOME=/app
 
