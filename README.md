@@ -52,3 +52,17 @@ services:
       - /opt/docker/streamlink-recorder/videos:/media/out:rw
       # Ziel-Ordner (Eingang für yt-upload)
       - /opt/docker/yt-upload/videos/in:/media/in:rw
+```
+---
+
+## 🛠️ Lokaler Build & Entwicklung
+
+Ein lokales Image kann über das Build-Skript kompiliert werden:
+
+./build.sh v1.0.0
+
+---
+
+## 📄 Lizenz
+
+Dieses Projekt steht unter der **GNU General Public License v3.0 (GPLv3)**.
