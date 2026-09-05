@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Wenn ein externes Skript gemountet wurde, nutzen wir das
 if [ -f /app/mover ]; then
