@@ -61,9 +61,25 @@ jobs:
             exit 0
           fi
 
-          # 3. Upstream-Digest für Debian Base-Image abfragen
-          DEBIAN_DIGEST=$(docker manifest inspect debian:trixie-slim 2>/dev/null | grep -m 1 "digest" | awk -F '"' '{print $4}' || echo "")
-          echo "Debian Digest: $DEBIAN_DIGEST"
+          # 3. Upstream-Digest für Debian Base-Image abfragen via Docker Hub API
+          echo "Frage Debian trixie-slim Digest von Docker Hub ab..."
+          DEBIAN_DIGEST=$(curl -s "https://registry.hub.docker.com/v2/library/debian/manifests/trixie-slim" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            2>/dev/null | grep -o '"digest":"sha256:[a-f0-9]*"' | head -1 | awk -F '"' '{print $4}' || echo "")
+          
+          # Fallback: Versuche mit jq falls vorhanden
+          if [ -z "$DEBIAN_DIGEST" ]; then
+            DEBIAN_DIGEST=$(curl -s "https://registry.hub.docker.com/v2/library/debian/manifests/trixie-slim" \
+              -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+              2>/dev/null | jq -r '.config.digest' 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$DEBIAN_DIGEST" ]; then
+            echo "WARNUNG: Konnte Debian Digest nicht abrufen!"
+            DEBIAN_DIGEST="unknown"
+          fi
+          
+          echo "Debian trixie-slim Digest: $DEBIAN_DIGEST"
 
           # Kombinierten Fingerprint erstellen
           CURRENT_FINGERPRINT=$(echo "${HEAD_COMMIT}:${DEBIAN_DIGEST}" | sha256sum | awk '{print $1}')
