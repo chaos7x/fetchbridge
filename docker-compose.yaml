@@ -37,7 +37,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/streamlink-recorder/videos
+      device: /opt/docker/tw-recorder/videos
 
   storage-target:
     driver: local
