@@ -16,4 +16,5 @@ __pycache__/
 docker-compose.override.yaml
 
 # Env datei ausschließen
-.envdocker-compose.yaml
+.env
+docker-compose.yaml
