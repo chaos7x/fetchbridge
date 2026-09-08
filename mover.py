@@ -12,6 +12,8 @@
 # GNU General Public License for more details.
 
 import os
+import sys
+import argparse
 import logging
 import shutil
 import inotify.adapters
@@ -121,7 +123,7 @@ def scan_existing_files():
             process_file(filepath)
     logging.debug(f"Initialer Scan beendet. {found_count} passende Datei(en) gescannt.")
 
-def main():
+def run_daemon():
     logging.info("Starte Inotify-Mover mit RO/RW-Erkennung...")
 
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
@@ -141,6 +143,30 @@ def main():
             full_path = Path(path) / filename
             logging.debug(f"Relevantes Event {type_names} auf {filename} -> Starte Verarbeitung")
             process_file(full_path)
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="mover",
+        description=f"{__title__} v{__version__}"
+    )
+    parser.add_argument(
+        "-D", "--daemon",
+        action="store_true",
+        help="Dämon-Modus: Dauerhafte Ordnerüberwachung"
+    )
+    parser.add_argument(
+         "-V", "--version",
+        action="version",
+        version=f"{__title__} v{__version__}"
+    )
+    args = parser.parse_args()
+
+    if not args.daemon:
+        parser.print_usage()
+        print("Hinweis: Zum Starten bitte -D oder --daemon verwenden.")
+        return
+
+    run_daemon()
 
 if __name__ == "__main__":
     main()
