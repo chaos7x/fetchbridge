@@ -17,6 +17,10 @@ import shutil
 import inotify.adapters
 from pathlib import Path
 
+__title__ = "Mediadog Mover CLI"
+__version__ = "1.0.10"
+
+
 # Liest das Log-Level aus den Env-Vars (Standard: INFO)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
