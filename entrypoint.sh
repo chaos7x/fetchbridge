@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# Docker startet den Recorder standardmäßig im Daemon-Modus.
+if [ "$#" -eq 0 ]; then
+    set -- -D
+fi
+
 # Wenn ein externes Skript gemountet wurde, nutzen wir das
 if [ -f /app/mover ]; then
     echo ">>> Using external mover from volume..."
