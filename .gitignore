@@ -18,3 +18,4 @@ docker-compose.override.yaml
 # Env datei ausschließen
 .env
 docker-compose.yaml
+.secrets
