@@ -1,13 +1,5 @@
 FROM debian:trixie-slim
 
-ARG VERSION
-ARG BUILD_DATE
-
-LABEL version="${VERSION}"
-LABEL build_date="${BUILD_DATE}"
-LABEL maintainer="Chaos7x"
-LABEL purpose="Directory monitoring and automated video moving"
-
 # Ungepufferte Python-Ausgabe für Docker Logs erzwingen
 ENV PYTHONUNBUFFERED=1
 
@@ -42,3 +34,11 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover \
 ENV HOME=/app
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+ARG VERSION
+ARG BUILD_DATE
+
+LABEL version="${VERSION}"
+LABEL build_date="${BUILD_DATE}"
+LABEL maintainer="Chaos7x"
+LABEL purpose="Directory monitoring and automated video moving"
