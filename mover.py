@@ -20,7 +20,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Mediadog Mover CLI"
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 # Liest das Log-Level aus den Env-Vars (Standard: INFO)
@@ -46,19 +46,26 @@ def is_writable(path: Path) -> bool:
     logging.debug(f"Mount-Prüfung für '{parent}': Writable={writable}")
     return writable
 
-def cleanup_empty_dirs(path: Path):
-    """Löscht leere Unterordner in RW-Mounts. Ignoriert RO-Mounts und Basis-Ordner."""
-    if path == SOURCE_DIR or not path.is_relative_to(SOURCE_DIR):
-        logging.debug(f"Aufräumen übersprungen (Ausnahme/Basis-Ordner): {path}")
+def cleanup_empty_dirs(directory: Path):
+    """Löscht leere Unterordner in RW-Mounts, ausgehend von 'directory' nach oben.
+
+    Erwartet ein Verzeichnis (nicht die verschobene Datei selbst!), das durch das
+    Verschieben einer Datei ggf. leer geworden ist. Bricht ab, sobald SOURCE_DIR
+    erreicht ist, ein Ordner nicht leer ist, oder der Ordner RO gemountet ist.
+    """
+    if directory == SOURCE_DIR or not directory.is_relative_to(SOURCE_DIR):
+        logging.debug(f"Aufräumen übersprungen (Ausnahme/Basis-Ordner): {directory}")
         return
 
-    if not is_writable(path):
-        logging.debug(f"Aufräumen übersprungen (RO-Mount): {path}")
+    if not is_writable(directory):
+        logging.debug(f"Aufräumen übersprungen (RO-Mount): {directory}")
         return
 
     try:
-        current = path.parent if path.is_file() else path
-        while current != SOURCE_DIR and current.parent != SOURCE_DIR and current.is_dir():
+        current = directory
+        # Nur current != SOURCE_DIR prüfen, damit auch direkte Unterordner von
+        # SOURCE_DIR entfernt werden können, sofern sie leer sind.
+        while current != SOURCE_DIR and current.is_dir():
             if not any(current.iterdir()):
                 current.rmdir()
                 logging.info(f"🧹 Leeres Verzeichnis entfernt: {current}")
@@ -67,7 +74,7 @@ def cleanup_empty_dirs(path: Path):
                 logging.debug(f"Verzeichnis nicht leer, stoppe Aufräumen: {current}")
                 break
     except Exception as e:
-        logging.warning(f"Fehler beim Aufräumen von {path}: {e}")
+        logging.warning(f"Fehler beim Aufräumen von {directory}: {e}")
 
 def process_file(filepath: Path):
     """Kopiert oder verschiebt die Datei basierend auf den Schreibrechten des Mounts."""
@@ -98,12 +105,17 @@ def process_file(filepath: Path):
         counter += 1
         logging.debug(f"Ziel existiert bereits. Neuer Name: {dest_path.name}")
 
+    # Elternverzeichnis VOR dem Verschieben merken - danach existiert die
+    # Datei an ihrem alten Pfad nicht mehr und filepath.parent lässt sich
+    # nicht mehr sinnvoll aus filepath selbst herleiten.
+    source_parent = filepath.parent
+
     try:
         if is_writable(filepath):
             logging.info(f"🚚 Verschiebe (RW): {filepath.name} -> {dest_path.name}")
             shutil.move(str(filepath), str(dest_path))
             logging.info(f"✅ Verschieben erfolgreich: {dest_path.name}")
-            cleanup_empty_dirs(filepath)
+            cleanup_empty_dirs(source_parent)
         else:
             logging.info(f"📋 Kopiere (RO): {filepath.name} -> {dest_path.name}")
             shutil.copy2(str(filepath), str(dest_path))
@@ -116,8 +128,12 @@ def scan_existing_files():
     """Verschiebt/Kopiert beim Container-Start bereits vorhandene fertige Dateien."""
     logging.info("Scanne nach bereits vorhandenen fertigen Dateien...")
     found_count = 0
-    for ext in ALLOWED_EXTENSIONS:
-        for filepath in SOURCE_DIR.rglob(f"*{ext}"):
+    # Über alle Dateien iterieren statt pro Endung zu globben: rglob("*.mkv")
+    # ist auf Linux case-sensitiv und würde z.B. ".MKV" übersehen. process_file
+    # normalisiert die Endung ohnehin auf Kleinschreibung, daher hier konsistent
+    # dieselbe Prüfung verwenden.
+    for filepath in SOURCE_DIR.rglob("*"):
+        if filepath.is_file() and filepath.suffix.lower() in ALLOWED_EXTENSIONS:
             found_count += 1
             logging.debug(f"Scan hat Datei gefunden: {filepath}")
             process_file(filepath)
