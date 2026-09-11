@@ -24,9 +24,9 @@ RUN mkdir -p /media/in /media/out /log && chmod 777 /media/in /media/out /log
 # ==========================================
 # LAYER 3: Skripte & Configs kopieren, ausführen & verlinken
 # ==========================================
+COPY bashrc /etc/global.bashrc
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY mover.py /usr/local/bin/mover
-COPY bashrc /etc/global.bashrc
 
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover \
     && ln -s /etc/global.bashrc /tmp/.bashrc \
