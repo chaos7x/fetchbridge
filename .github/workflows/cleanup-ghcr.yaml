@@ -12,6 +12,6 @@ jobs:
       - name: Delete untagged images
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
-          package: mediadog
+          package: fetchbridge
           delete-untagged: true
           dry-run: false
