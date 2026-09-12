@@ -23,7 +23,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.1.0"
+__version__ = "1.0.2"
 
 # Standard-Konfigurationspfad für Fetchbridge - völlig unabhängig vom
 # tw-recorder (eigene ENV-Variablen, eigener Pfad).
@@ -95,8 +95,8 @@ def load_config():
         except Exception as e:
             logging.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
 
-    source_dir = Path(config.get("mover", "source_dir", fallback=os.getenv("SOURCE_DIR", "/media/out")))
-    target_dir = Path(config.get("mover", "target_dir", fallback=os.getenv("TARGET_DIR", "/media/in")))
+    source_dir = Path(config.get("general", "source_dir", fallback=os.getenv("SOURCE_DIR", "/media/out")))
+    target_dir = Path(config.get("general", "target_dir", fallback=os.getenv("TARGET_DIR", "/media/in")))
 
     allowed_raw = config.get(
         "mover", "allowed_extensions",
