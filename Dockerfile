@@ -25,9 +25,9 @@ RUN mkdir -p /media/in /media/out /log && chmod 777 /media/in /media/out /log
 # ==========================================
 COPY bashrc /etc/global.bashrc
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY mover.py /usr/local/bin/mover
+COPY fetchbridge.py /usr/local/bin/fetchbridge
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover \
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
     && ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
 

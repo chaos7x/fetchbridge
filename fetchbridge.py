@@ -14,16 +14,123 @@
 import os
 import sys
 import argparse
+import configparser
+import hashlib
 import logging
 import shutil
+import time
 import inotify.adapters
 from pathlib import Path
 
-__title__ = "Mediadog Mover CLI"
-__version__ = "1.0.2"
+__title__ = "Fetchbridge CLI"
+__version__ = "1.1.0"
+
+# Standard-Konfigurationspfad für Fetchbridge - völlig unabhängig vom
+# tw-recorder (eigene ENV-Variablen, eigener Pfad).
+CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
+CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
+
+# Config-Werte, bis load_config() im Daemon-Start die echten Werte setzt.
+SOURCE_DIR = Path("/media/out")
+TARGET_DIR = Path("/media/in")
+ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
+TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
+WATCH_EVENTS = {'IN_MOVED_TO', 'IN_CLOSE_WRITE'}
+
+# Intervall in Sekunden, in dem während des Daemon-Betriebs auf Config-
+# Änderungen geprüft wird (per günstigem MD5-Hash-Vergleich, echtes
+# Neuladen nur bei tatsächlicher Änderung - identischer Mechanismus wie
+# im tw-recorder).
+CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
 
 
-# Liest das Log-Level aus den Env-Vars (Standard: INFO)
+def get_config_files_state() -> dict:
+    """Erstellt ein Mapping von Dateipfad zu MD5-Hash für die Haupt-Config und conf.d."""
+    files_state = {}
+    config_files = []
+
+    if CONFIG_FILE.is_file():
+        config_files.append(CONFIG_FILE)
+    if CONF_D_DIR.is_dir():
+        config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
+
+    for f in config_files:
+        try:
+            files_state[f] = hashlib.md5(f.read_bytes()).hexdigest()
+        except Exception:
+            pass
+
+    return files_state
+
+
+def get_config_hash() -> tuple[str, dict]:
+    """Berechnet den Gesamt-Hash und gibt den detaillierten Status aller Dateien zurück."""
+    state = get_config_files_state()
+    combined = hashlib.md5()
+    for f in sorted(state.keys()):
+        combined.update(f.name.encode("utf-8"))
+        combined.update(state[f].encode("utf-8"))
+    return combined.hexdigest(), state
+
+
+def load_config():
+    """Liest die INI-Konfigurationsdatei und ein conf.d-Verzeichnis ein mit Fallback auf Environment Variables."""
+    config = configparser.ConfigParser(
+        interpolation=None,
+        delimiters=('=',),
+        comment_prefixes=('#', ';'),
+        allow_no_value=True
+    )
+    config.optionxform = str
+
+    config_files = []
+    if CONFIG_FILE.is_file():
+        config_files.append(CONFIG_FILE)
+    if CONF_D_DIR.is_dir():
+        config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
+
+    if config_files:
+        try:
+            config.read(config_files, encoding="utf-8")
+        except Exception as e:
+            logging.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
+
+    source_dir = Path(config.get("mover", "source_dir", fallback=os.getenv("SOURCE_DIR", "/media/out")))
+    target_dir = Path(config.get("mover", "target_dir", fallback=os.getenv("TARGET_DIR", "/media/in")))
+
+    allowed_raw = config.get(
+        "mover", "allowed_extensions",
+        fallback=os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.webm")
+    )
+    allowed_extensions = {
+        e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
+        for e in allowed_raw.split(",") if e.strip()
+    }
+
+    temp_raw = config.get(
+        "mover", "temp_extensions",
+        fallback=os.getenv("TEMP_EXTENSIONS", ".part,.ytdl,.tmp,.temp")
+    )
+    temp_extensions = {
+        e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
+        for e in temp_raw.split(",") if e.strip()
+    }
+
+    log_level = config.get("general", "log_level", fallback=os.getenv("LOG_LEVEL", "INFO")).upper()
+
+    return {
+        "source_dir": source_dir,
+        "target_dir": target_dir,
+        "allowed_extensions": allowed_extensions,
+        "temp_extensions": temp_extensions,
+        "log_level": log_level,
+        "config_obj": config
+    }
+
+
+# Liest das Log-Level initial aus den Env-Vars (Standard: INFO). Wird nach
+# dem ersten load_config()-Aufruf im Daemon ggf. durch den Config-Wert
+# überschrieben.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
@@ -31,13 +138,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-
-SOURCE_DIR = Path("/media/out")
-TARGET_DIR = Path("/media/in")
-
-ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
-TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
-WATCH_EVENTS = {'IN_MOVED_TO', 'IN_CLOSE_WRITE'}
 
 def is_writable(path: Path) -> bool:
     """Prüft, ob der Ordner beschreibbar ist (RW) oder Read-Only (RO) gemountet wurde."""
@@ -140,7 +240,16 @@ def scan_existing_files():
     logging.debug(f"Initialer Scan beendet. {found_count} passende Datei(en) gescannt.")
 
 def run_daemon():
-    logging.info("Starte Inotify-Mover mit RO/RW-Erkennung...")
+    global SOURCE_DIR, TARGET_DIR, ALLOWED_EXTENSIONS, TEMP_EXTENSIONS
+
+    cfg = load_config()
+    SOURCE_DIR = cfg["source_dir"]
+    TARGET_DIR = cfg["target_dir"]
+    ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
+    TEMP_EXTENSIONS = cfg["temp_extensions"]
+    logging.getLogger().setLevel(cfg["log_level"])
+
+    logging.info("Starte Inotify-Fetchbridge mit RO/RW-Erkennung...")
 
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -149,7 +258,37 @@ def run_daemon():
     i = inotify.adapters.InotifyTree(str(SOURCE_DIR))
     logging.debug(f"InotifyTree Überwachung gestartet auf: {SOURCE_DIR}")
 
-    for event in i.event_gen(yield_nones=False):
+    last_cfg_hash, _ = get_config_hash()
+    last_cfg_check = time.monotonic()
+
+    # yield_nones + timeout_s sorgen dafür, dass die Schleife auch ohne
+    # Dateisystem-Events regelmäßig aufwacht, damit Config-Änderungen
+    # zeitnah erkannt werden (derselbe Hash-Mechanismus wie im tw-recorder).
+    for event in i.event_gen(yield_nones=True, timeout_s=CONFIG_CHECK_INTERVAL):
+        if (time.monotonic() - last_cfg_check) >= CONFIG_CHECK_INTERVAL:
+            last_cfg_check = time.monotonic()
+            current_cfg_hash, _ = get_config_hash()
+            if current_cfg_hash != last_cfg_hash:
+                last_cfg_hash = current_cfg_hash
+                logging.info("🔄 Config-Änderung erkannt, lade neu...")
+                cfg = load_config()
+                if cfg["source_dir"] != SOURCE_DIR:
+                    logging.warning(
+                        f"source_dir geändert ({SOURCE_DIR} -> {cfg['source_dir']}), "
+                        "dies erfordert einen Neustart des Fetchbridge-Prozesses, da "
+                        "InotifyTree fest an den Startpfad gebunden ist. "
+                        "Änderung wird ignoriert, bis der Prozess neu gestartet wird."
+                    )
+                else:
+                    TARGET_DIR = cfg["target_dir"]
+                    ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
+                    TEMP_EXTENSIONS = cfg["temp_extensions"]
+                    logging.getLogger().setLevel(cfg["log_level"])
+                    TARGET_DIR.mkdir(parents=True, exist_ok=True)
+
+        if event is None:
+            continue
+
         (_, type_names, path, filename) = event
 
         # Alle Inotify-Events im Debugging sichtbar machen
@@ -162,7 +301,7 @@ def run_daemon():
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="mover",
+        prog="fetchbridge",
         description=f"{__title__} v{__version__}"
     )
     parser.add_argument(
