@@ -40,7 +40,7 @@ case "$#" in
         ;;
 esac
 
-IMAGE_NAME="mediadog"
+IMAGE_NAME="fetchbridge"
 BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # Bestimme Dockerfile und Tag dynamisch basierend auf der Variante

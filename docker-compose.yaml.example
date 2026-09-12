@@ -1,8 +1,8 @@
 services:
-  mediadog:
-    image: ghcr.io/chaos7x/mediadog:${IMAGE_VERSION:-latest}
-    container_name: mediadog
-    hostname: mediadog
+  fetchbridge:
+    image: ghcr.io/chaos7x/fetchbridge:${IMAGE_VERSION:-latest}
+    container_name: fetchbridge
+    hostname: fetchbridge
     user: "11107:11108"
     restart: unless-stopped
     environment:
