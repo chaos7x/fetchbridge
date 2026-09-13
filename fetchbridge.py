@@ -23,7 +23,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
@@ -267,40 +267,51 @@ def run_daemon():
     last_cfg_hash, _ = get_config_hash()
     last_cfg_check = time.monotonic()
 
-    for event in i.event_gen(yield_nones=True, timeout_s=CONFIG_CHECK_INTERVAL):
-        if (time.monotonic() - last_cfg_check) >= CONFIG_CHECK_INTERVAL:
-            last_cfg_check = time.monotonic()
-            current_cfg_hash, _ = get_config_hash()
-            if current_cfg_hash != last_cfg_hash:
-                last_cfg_hash = current_cfg_hash
-                logging.info("🔄 Config-Änderung erkannt, lade neu...")
-                cfg = load_config()
-                if cfg["source_dir"] != SOURCE_DIR:
-                    logging.warning(
-                        f"source_dir geändert ({SOURCE_DIR} -> {cfg['source_dir']}), "
-                        "dies erfordert einen Neustart des Fetchbridge-Prozesses, da "
-                        "InotifyTree fest an den Startpfad gebunden ist. "
-                        "Änderung wird ignoriert, bis der Prozess neu gestartet wird."
-                    )
-                else:
-                    TARGET_DIR = cfg["target_dir"]
-                    ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
-                    TEMP_EXTENSIONS = cfg["temp_extensions"]
-                    CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
-                    logging.getLogger().setLevel(cfg["log_level"])
-                    TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    # WICHTIG: event_gen() mit timeout_s beendet sich nach einem einzigen
+    # Idle-Timeout ohne Event selbst (StopIteration) - es ist KEIN
+    # wiederkehrender periodischer Wecker! Ohne die äußere while-Schleife
+    # stirbt der komplette Daemon-Prozess (exit code 0, ohne Exception),
+    # sobald z.B. mal >CONFIG_CHECK_INTERVAL Sekunden lang keine Datei
+    # reinkommt - Docker startet ihn dann per Restart-Policy endlos neu.
+    while True:
+        for event in i.event_gen(yield_nones=True, timeout_s=CONFIG_CHECK_INTERVAL):
+            if (time.monotonic() - last_cfg_check) >= CONFIG_CHECK_INTERVAL:
+                last_cfg_check = time.monotonic()
+                current_cfg_hash, _ = get_config_hash()
+                if current_cfg_hash != last_cfg_hash:
+                    last_cfg_hash = current_cfg_hash
+                    logging.info("🔄 Config-Änderung erkannt, lade neu...")
+                    cfg = load_config()
+                    if cfg["source_dir"] != SOURCE_DIR:
+                        logging.warning(
+                            f"source_dir geändert ({SOURCE_DIR} -> {cfg['source_dir']}), "
+                            "dies erfordert einen Neustart des Fetchbridge-Prozesses, da "
+                            "InotifyTree fest an den Startpfad gebunden ist. "
+                            "Änderung wird ignoriert, bis der Prozess neu gestartet wird."
+                        )
+                    else:
+                        TARGET_DIR = cfg["target_dir"]
+                        ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
+                        TEMP_EXTENSIONS = cfg["temp_extensions"]
+                        CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
+                        logging.getLogger().setLevel(cfg["log_level"])
+                        TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
-        if event is None:
-            continue
+            if event is None:
+                continue
 
-        (_, type_names, path, filename) = event
+            (_, type_names, path, filename) = event
 
-        logging.debug(f"Inotify-Event empfangen: {type_names} für {path}/{filename}")
+            logging.debug(f"Inotify-Event empfangen: {type_names} für {path}/{filename}")
 
-        if WATCH_EVENTS.intersection(type_names):
-            full_path = Path(path) / filename
-            logging.debug(f"Relevantes Event {type_names} auf {filename} -> Starte Verarbeitung")
-            process_file(full_path)
+            if WATCH_EVENTS.intersection(type_names):
+                full_path = Path(path) / filename
+                logging.debug(f"Relevantes Event {type_names} auf {filename} -> Starte Verarbeitung")
+                process_file(full_path)
+
+        # event_gen() ist idle-timeout-bedingt ausgelaufen -> neu anstoßen,
+        # statt den Daemon zu beenden.
+        logging.debug("event_gen() Idle-Timeout erreicht, starte Watch-Zyklus neu.")
 
 def main():
     parser = argparse.ArgumentParser(
