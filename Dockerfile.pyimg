@@ -37,6 +37,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
     && ln -s /etc/global.bashrc /app/.bashrc
 
 ENV HOME=/app
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python3 /usr/local/bin/fetchbridge --healthcheck
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
