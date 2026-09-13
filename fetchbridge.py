@@ -23,7 +23,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
@@ -36,6 +36,46 @@ WATCH_EVENTS = {'IN_MOVED_TO', 'IN_CLOSE_WRITE'}
 CLEANUP_EMPTY_DIRS = False
 
 CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
+
+# Heartbeat-Datei für den Docker HEALTHCHECK (kein HTTP-Port vorhanden).
+# Der Daemon aktualisiert den Zeitstempel dieser Datei regelmäßig; der
+# Healthcheck-Subcommand (--healthcheck) prüft nur, ob sie "frisch" genug
+# ist. Erkennt sowohl tote als auch hängende (deadlocked) Prozesse.
+HEARTBEAT_FILE = Path(os.getenv("HEARTBEAT_FILE", "/tmp/fetchbridge.heartbeat"))
+HEARTBEAT_MAX_AGE = int(os.getenv("HEARTBEAT_MAX_AGE", "60"))
+
+
+def write_heartbeat():
+    """Schreibt den aktuellen Zeitstempel in die Heartbeat-Datei."""
+    try:
+        HEARTBEAT_FILE.write_text(str(time.time()))
+    except OSError as e:
+        logging.warning(f"Konnte Heartbeat-Datei nicht schreiben ({HEARTBEAT_FILE}): {e}")
+
+
+def check_healthcheck() -> int:
+    """Prüft die Heartbeat-Datei und gibt einen Exit-Code zurück (0=healthy, 1=unhealthy).
+
+    Wird über 'fetchbridge --healthcheck' vom Docker HEALTHCHECK aufgerufen -
+    läuft als eigener kurzlebiger Prozess, unabhängig vom Daemon.
+    """
+    if not HEARTBEAT_FILE.is_file():
+        print(f"UNHEALTHY: Heartbeat-Datei fehlt: {HEARTBEAT_FILE}")
+        return 1
+
+    try:
+        last_beat = float(HEARTBEAT_FILE.read_text().strip())
+    except (OSError, ValueError) as e:
+        print(f"UNHEALTHY: Heartbeat-Datei nicht lesbar/ungültig: {e}")
+        return 1
+
+    age = time.time() - last_beat
+    if age > HEARTBEAT_MAX_AGE:
+        print(f"UNHEALTHY: Letzter Heartbeat ist {age:.0f}s alt (Limit: {HEARTBEAT_MAX_AGE}s)")
+        return 1
+
+    print(f"HEALTHY: Letzter Heartbeat vor {age:.0f}s")
+    return 0
 
 
 def get_config_files_state() -> dict:
@@ -256,6 +296,7 @@ def run_daemon():
         sys.exit(1)
 
     scan_existing_files()
+    write_heartbeat()
 
     try:
         i = inotify.adapters.InotifyTree(str(SOURCE_DIR))
@@ -308,10 +349,12 @@ def run_daemon():
                 full_path = Path(path) / filename
                 logging.debug(f"Relevantes Event {type_names} auf {filename} -> Starte Verarbeitung")
                 process_file(full_path)
+                write_heartbeat()
 
         # event_gen() ist idle-timeout-bedingt ausgelaufen -> neu anstoßen,
         # statt den Daemon zu beenden.
         logging.debug("event_gen() Idle-Timeout erreicht, starte Watch-Zyklus neu.")
+        write_heartbeat()
 
 def main():
     parser = argparse.ArgumentParser(
@@ -324,11 +367,19 @@ def main():
         help="Dämon-Modus: Dauerhafte Ordnerüberwachung"
     )
     parser.add_argument(
+        "--healthcheck",
+        action="store_true",
+        help="Prüft die Heartbeat-Datei und beendet sich mit Exit-Code 0 (healthy) oder 1 (unhealthy). Für Docker HEALTHCHECK."
+    )
+    parser.add_argument(
          "-V", "--version",
         action="version",
         version=f"{__title__} v{__version__}"
     )
     args = parser.parse_args()
+
+    if args.healthcheck:
+        sys.exit(check_healthcheck())
 
     if not args.daemon:
         parser.print_usage()
