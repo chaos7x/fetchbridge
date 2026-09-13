@@ -23,29 +23,22 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
-# Standard-Konfigurationspfad für Fetchbridge - völlig unabhängig vom
-# tw-recorder (eigene ENV-Variablen, eigener Pfad).
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
-# Config-Werte, bis load_config() im Daemon-Start die echten Werte setzt.
 SOURCE_DIR = Path("/media/out")
 TARGET_DIR = Path("/media/in")
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {'IN_MOVED_TO', 'IN_CLOSE_WRITE'}
+CLEANUP_EMPTY_DIRS = False
 
-# Intervall in Sekunden, in dem während des Daemon-Betriebs auf Config-
-# Änderungen geprüft wird (per günstigem MD5-Hash-Vergleich, echtes
-# Neuladen nur bei tatsächlicher Änderung - identischer Mechanismus wie
-# im tw-recorder).
 CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
 
 
 def get_config_files_state() -> dict:
-    """Erstellt ein Mapping von Dateipfad zu MD5-Hash für die Haupt-Config und conf.d."""
     files_state = {}
     config_files = []
 
@@ -64,7 +57,6 @@ def get_config_files_state() -> dict:
 
 
 def get_config_hash() -> tuple[str, dict]:
-    """Berechnet den Gesamt-Hash und gibt den detaillierten Status aller Dateien zurück."""
     state = get_config_files_state()
     combined = hashlib.md5()
     for f in sorted(state.keys()):
@@ -74,7 +66,6 @@ def get_config_hash() -> tuple[str, dict]:
 
 
 def load_config():
-    """Liest die INI-Konfigurationsdatei und ein conf.d-Verzeichnis ein mit Fallback auf Environment Variables."""
     config = configparser.ConfigParser(
         interpolation=None,
         delimiters=('=',),
@@ -118,19 +109,23 @@ def load_config():
 
     log_level = config.get("general", "log_level", fallback=os.getenv("LOG_LEVEL", "INFO")).upper()
 
+    cleanup_raw = config.get(
+        "mover", "cleanup_empty_dirs",
+        fallback=os.getenv("CLEANUP_EMPTY_DIRS", "false")
+    )
+    cleanup_empty_dirs_enabled = cleanup_raw.strip().lower() in ("1", "true", "yes")
+
     return {
         "source_dir": source_dir,
         "target_dir": target_dir,
         "allowed_extensions": allowed_extensions,
         "temp_extensions": temp_extensions,
         "log_level": log_level,
+        "cleanup_empty_dirs": cleanup_empty_dirs_enabled,
         "config_obj": config
     }
 
 
-# Liest das Log-Level initial aus den Env-Vars (Standard: INFO). Wird nach
-# dem ersten load_config()-Aufruf im Daemon ggf. durch den Config-Wert
-# überschrieben.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
@@ -140,19 +135,12 @@ logging.basicConfig(
 )
 
 def is_writable(path: Path) -> bool:
-    """Prüft, ob der Ordner beschreibbar ist (RW) oder Read-Only (RO) gemountet wurde."""
     parent = path.parent if path.is_file() else path
     writable = os.access(parent, os.W_OK)
     logging.debug(f"Mount-Prüfung für '{parent}': Writable={writable}")
     return writable
 
 def cleanup_empty_dirs(directory: Path):
-    """Löscht leere Unterordner in RW-Mounts, ausgehend von 'directory' nach oben.
-
-    Erwartet ein Verzeichnis (nicht die verschobene Datei selbst!), das durch das
-    Verschieben einer Datei ggf. leer geworden ist. Bricht ab, sobald SOURCE_DIR
-    erreicht ist, ein Ordner nicht leer ist, oder der Ordner RO gemountet ist.
-    """
     if directory == SOURCE_DIR or not directory.is_relative_to(SOURCE_DIR):
         logging.debug(f"Aufräumen übersprungen (Ausnahme/Basis-Ordner): {directory}")
         return
@@ -163,8 +151,6 @@ def cleanup_empty_dirs(directory: Path):
 
     try:
         current = directory
-        # Nur current != SOURCE_DIR prüfen, damit auch direkte Unterordner von
-        # SOURCE_DIR entfernt werden können, sofern sie leer sind.
         while current != SOURCE_DIR and current.is_dir():
             if not any(current.iterdir()):
                 current.rmdir()
@@ -177,19 +163,16 @@ def cleanup_empty_dirs(directory: Path):
         logging.warning(f"Fehler beim Aufräumen von {directory}: {e}")
 
 def process_file(filepath: Path):
-    """Kopiert oder verschiebt die Datei basierend auf den Schreibrechten des Mounts."""
     if not filepath.is_file():
         logging.debug(f"Ignoriere (Keine reguläre Datei oder existiert nicht mehr): {filepath}")
         return
 
     ext = filepath.suffix.lower()
 
-    # Temp-Dateien und versteckte Dateien ignorieren
     if ext in TEMP_EXTENSIONS or filepath.name.startswith("."):
         logging.debug(f"Ignoriere Temp/Versteckte Datei: {filepath.name}")
         return
 
-    # Nur erlaubte Formate verarbeiten
     if ext not in ALLOWED_EXTENSIONS:
         logging.debug(f"Ignoriere nicht unterstützte Endung '{ext}': {filepath.name}")
         return
@@ -197,7 +180,6 @@ def process_file(filepath: Path):
     filename = filepath.name
     dest_path = TARGET_DIR / filename
 
-    # Namenskollisionen vermeiden
     counter = 1
     original_dest = dest_path
     while dest_path.exists():
@@ -205,9 +187,6 @@ def process_file(filepath: Path):
         counter += 1
         logging.debug(f"Ziel existiert bereits. Neuer Name: {dest_path.name}")
 
-    # Elternverzeichnis VOR dem Verschieben merken - danach existiert die
-    # Datei an ihrem alten Pfad nicht mehr und filepath.parent lässt sich
-    # nicht mehr sinnvoll aus filepath selbst herleiten.
     source_parent = filepath.parent
 
     try:
@@ -215,7 +194,8 @@ def process_file(filepath: Path):
             logging.info(f"🚚 Verschiebe (RW): {filepath.name} -> {dest_path.name}")
             shutil.move(str(filepath), str(dest_path))
             logging.info(f"✅ Verschieben erfolgreich: {dest_path.name}")
-            cleanup_empty_dirs(source_parent)
+            if CLEANUP_EMPTY_DIRS:
+                cleanup_empty_dirs(source_parent)
         else:
             logging.info(f"📋 Kopiere (RO): {filepath.name} -> {dest_path.name}")
             shutil.copy2(str(filepath), str(dest_path))
@@ -225,13 +205,8 @@ def process_file(filepath: Path):
         logging.warning(f"Fehler bei Verarbeitung von {filename}: {e}")
 
 def scan_existing_files():
-    """Verschiebt/Kopiert beim Container-Start bereits vorhandene fertige Dateien."""
     logging.info("Scanne nach bereits vorhandenen fertigen Dateien...")
     found_count = 0
-    # Über alle Dateien iterieren statt pro Endung zu globben: rglob("*.mkv")
-    # ist auf Linux case-sensitiv und würde z.B. ".MKV" übersehen. process_file
-    # normalisiert die Endung ohnehin auf Kleinschreibung, daher hier konsistent
-    # dieselbe Prüfung verwenden.
     for filepath in SOURCE_DIR.rglob("*"):
         if filepath.is_file() and filepath.suffix.lower() in ALLOWED_EXTENSIONS:
             found_count += 1
@@ -240,30 +215,58 @@ def scan_existing_files():
     logging.debug(f"Initialer Scan beendet. {found_count} passende Datei(en) gescannt.")
 
 def run_daemon():
-    global SOURCE_DIR, TARGET_DIR, ALLOWED_EXTENSIONS, TEMP_EXTENSIONS
+    global SOURCE_DIR, TARGET_DIR, ALLOWED_EXTENSIONS, TEMP_EXTENSIONS, CLEANUP_EMPTY_DIRS
 
     cfg = load_config()
     SOURCE_DIR = cfg["source_dir"]
     TARGET_DIR = cfg["target_dir"]
     ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
     TEMP_EXTENSIONS = cfg["temp_extensions"]
+    CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
     logging.getLogger().setLevel(cfg["log_level"])
 
     logging.info("Starte Inotify-Fetchbridge mit RO/RW-Erkennung...")
 
-    TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    # Aufgelöste Konfiguration sichtbar machen - sonst ist bei falschem
+    # source_dir/target_dir (z.B. durch Config-Datei oder Env-Var) im Log
+    # nicht erkennbar, welche Pfade tatsächlich verwendet werden.
+    used_config_files = [str(f) for f in ([CONFIG_FILE] if CONFIG_FILE.is_file() else [])] + \
+        [str(f) for f in (sorted(CONF_D_DIR.glob("*.conf")) if CONF_D_DIR.is_dir() else [])]
+    logging.info(
+        f"Aufgelöste Konfiguration: source_dir={SOURCE_DIR} target_dir={TARGET_DIR} "
+        f"allowed_extensions={sorted(ALLOWED_EXTENSIONS)} log_level={cfg['log_level']} "
+        f"cleanup_empty_dirs={CLEANUP_EMPTY_DIRS} "
+        f"config_files={used_config_files if used_config_files else 'keine (nur Defaults/Env)'}"
+    )
+
+    # Fail-fast mit klarer Meldung statt eines kryptischen OSError aus
+    # InotifyTree, falls source_dir nicht existiert (z.B. falscher/fehlender
+    # Mount oder falscher Pfad in Config/Env-Var).
+    if not SOURCE_DIR.is_dir():
+        logging.critical(
+            f"❌ source_dir existiert nicht oder ist kein Verzeichnis: '{SOURCE_DIR}'. "
+            "Prüfe Docker-Volume-Mount sowie SOURCE_DIR in Env/Config. Beende Prozess."
+        )
+        sys.exit(1)
+
+    try:
+        TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logging.critical(f"❌ target_dir '{TARGET_DIR}' konnte nicht angelegt werden: {e}. Beende Prozess.")
+        sys.exit(1)
 
     scan_existing_files()
 
-    i = inotify.adapters.InotifyTree(str(SOURCE_DIR))
+    try:
+        i = inotify.adapters.InotifyTree(str(SOURCE_DIR))
+    except Exception as e:
+        logging.critical(f"❌ Konnte InotifyTree für '{SOURCE_DIR}' nicht starten: {e}. Beende Prozess.")
+        sys.exit(1)
     logging.debug(f"InotifyTree Überwachung gestartet auf: {SOURCE_DIR}")
 
     last_cfg_hash, _ = get_config_hash()
     last_cfg_check = time.monotonic()
 
-    # yield_nones + timeout_s sorgen dafür, dass die Schleife auch ohne
-    # Dateisystem-Events regelmäßig aufwacht, damit Config-Änderungen
-    # zeitnah erkannt werden (derselbe Hash-Mechanismus wie im tw-recorder).
     for event in i.event_gen(yield_nones=True, timeout_s=CONFIG_CHECK_INTERVAL):
         if (time.monotonic() - last_cfg_check) >= CONFIG_CHECK_INTERVAL:
             last_cfg_check = time.monotonic()
@@ -283,6 +286,7 @@ def run_daemon():
                     TARGET_DIR = cfg["target_dir"]
                     ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
                     TEMP_EXTENSIONS = cfg["temp_extensions"]
+                    CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
                     logging.getLogger().setLevel(cfg["log_level"])
                     TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -291,7 +295,6 @@ def run_daemon():
 
         (_, type_names, path, filename) = event
 
-        # Alle Inotify-Events im Debugging sichtbar machen
         logging.debug(f"Inotify-Event empfangen: {type_names} für {path}/{filename}")
 
         if WATCH_EVENTS.intersection(type_names):
