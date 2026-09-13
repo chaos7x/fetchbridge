@@ -23,7 +23,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 # Standard-Konfigurationspfad für Fetchbridge - völlig unabhängig vom
 # tw-recorder (eigene ENV-Variablen, eigener Pfad).
