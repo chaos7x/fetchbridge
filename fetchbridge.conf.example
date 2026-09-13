@@ -1,0 +1,30 @@
+# Beispiel-Konfiguration für Fetchbridge (fetchbridge.py)
+#
+# Standardpfad: /etc/fetchbridge/fetchbridge.conf
+# Zusätzlich wird ein Verzeichnis /etc/fetchbridge/conf.d/*.conf eingelesen
+# (alphabetisch, spätere Dateien überschreiben frühere Werte). Beide Pfade
+# lassen sich per ENV überschreiben: CONFIG_FILE, CONF_D_DIR.
+#
+# Änderungen an dieser Datei werden im laufenden Betrieb automatisch
+# erkannt (Prüfung alle CONFIG_CHECK_INTERVAL Sekunden per MD5-Hash) und
+# angewendet - außer bei source_dir, das einen Neustart erfordert.
+
+[general]
+# Log-Level: DEBUG, INFO, WARNING, ERROR
+# log_level = INFO
+
+# Quellverzeichnis, das überwacht wird (Änderung erfordert Neustart des
+# Fetchbridge-Prozesses, da InotifyTree fest an den Startpfad gebunden ist)
+# source_dir = /media/out
+
+# Zielverzeichnis, in das fertige Dateien verschoben/kopiert werden
+# target_dir = /media/in
+
+
+[mover]
+# Kommagetrennte Liste erlaubter Datei-Endungen
+# allowed_extensions = .mkv,.mp4,.webm
+
+# Kommagetrennte Liste von Endungen, die als "noch nicht fertig" gelten
+# und ignoriert werden
+# temp_extensions = .part,.ytdl,.tmp,.temp

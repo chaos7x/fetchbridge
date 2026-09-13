@@ -19,16 +19,17 @@ WORKDIR /app
 # ==========================================
 # LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
 # ==========================================
-RUN mkdir -p /media/in /media/out /log && chmod 777 /media/in /media/out /log
+RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 777 /media/in /media/out /log
 
 # ==========================================
 # LAYER 3: Skripte & Configs kopieren, ausführen & verlinken
 # ==========================================
-COPY bashrc /etc/global.bashrc
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY mover.py /usr/local/bin/mover
+COPY --chmod=644 bashrc /etc/global.bashrc
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 fetchbridge.py /usr/local/bin/fetchbridge
+COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/mover \
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
     && ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
 

@@ -23,7 +23,7 @@ services:
 # SEPARATE VOLUMES DEKLARATION
 # ==========================================
 volumes:
-  # --- App Volume (für externe mover.py / Skripte) ---
+  # --- App Volume (für externe fetchbridge.py / Skripte) ---
   app:
     driver: local
     driver_opts:
