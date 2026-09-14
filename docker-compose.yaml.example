@@ -11,11 +11,16 @@ services:
       - HOME=/tmp
     env_file:
       - .env
-    healthcheck:
-      test: ["CMD", "python3", "/usr/local/bin/fetchbridge", "--healthcheck"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
+
+# ==========================================
+# Healthcheck, muss seperat altiviert werden, wenn fetchbridge sich unter /app befindet
+# ==========================================
+#    healthcheck:
+#      test: ["CMD", "python3", "/app/fetchbridge", "--healthcheck"]
+#      interval: 30s
+#      timeout: 5s
+#      start_period: 15s
+#
       retries: 3
     volumes:
       # Optionales App-Volume (bei Bedarf einkommentieren)
