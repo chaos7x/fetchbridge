@@ -33,8 +33,14 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
     && ln -s /etc/global.bashrc /app/.bashrc
 
 ENV HOME=/app
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD python3 /usr/local/bin/fetchbridge --healthcheck
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD sh -c '\
+    if [ -f /app/fetchbridge ]; then \
+      exec /app/fetchbridge --healthcheck; \
+    else \
+      exec /usr/local/bin/fetchbridge --healthcheck; \
+    fi'
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
