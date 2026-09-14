@@ -23,7 +23,7 @@ import inotify.adapters
 from pathlib import Path
 
 __title__ = "Fetchbridge CLI"
-__version__ = "1.1.3"
+__version__ = "1.2.0"
 
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
