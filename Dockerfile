@@ -4,16 +4,22 @@ FROM debian:trixie-slim
 ENV PYTHONUNBUFFERED=1
 
 # ==========================================
-# LAYER 1: System-Pakete installieren
+# LAYER 1: System-Pakete + Pip-Installation
 # ==========================================
+# python3-inotify ist unter Debian das korrekte Paket (importiert als
+# `inotify.adapters`) - kein --target nötig, Debians python3-pip installiert
+# bereits automatisch nach /usr/local (FHS-konform gepatcht).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libcom-err2 \
+    python3 \
+    python3-pip \
+    python3-setuptools \
     python3-inotify \
+    libcom-err2 \
     mc \
     && rm -rf /var/lib/apt/lists/*
 
-# Arbeitsverzeichnis setzen (Metadaten-Layer)
 WORKDIR /app
+ENV HOME=/app
 
 # ==========================================
 # LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
@@ -21,26 +27,25 @@ WORKDIR /app
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 3: Skripte & Configs kopieren, ausführen & verlinken
+# LAYER 3: fetchbridge-Package installieren
+# ==========================================
+COPY pyproject.toml /app/pyproject.toml
+COPY src/ /app/src/
+RUN pip install --no-cache-dir --break-system-packages --no-deps . \
+    && rm -rf /app/pyproject.toml /app/src /app/build
+
+# ==========================================
+# LAYER 4: Skripte & Configs kopieren
 # ==========================================
 COPY --chmod=644 bashrc /etc/global.bashrc
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=755 fetchbridge.py /usr/local/bin/fetchbridge
 COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
-    && ln -s /etc/global.bashrc /tmp/.bashrc \
+RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
 
-ENV HOME=/app
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD sh -c '\
-    if [ -f /app/fetchbridge ]; then \
-      exec /app/fetchbridge --healthcheck; \
-    else \
-      exec /usr/local/bin/fetchbridge --healthcheck; \
-    fi'
+  CMD ["fetchbridge", "--healthcheck"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 

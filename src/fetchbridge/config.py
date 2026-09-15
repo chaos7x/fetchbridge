@@ -1,0 +1,109 @@
+"""Konfiguration & Standard-Pfade."""
+
+import configparser
+import hashlib
+import logging
+import os
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
+CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
+
+SOURCE_DIR = Path("/media/out")
+TARGET_DIR = Path("/media/in")
+ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
+TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
+WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
+CLEANUP_EMPTY_DIRS = False
+
+CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
+
+
+def get_config_files_state() -> dict:
+    files_state = {}
+    config_files = []
+
+    if CONFIG_FILE.is_file():
+        config_files.append(CONFIG_FILE)
+    if CONF_D_DIR.is_dir():
+        config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
+
+    for f in config_files:
+        try:
+            files_state[f] = hashlib.md5(f.read_bytes(), usedforsecurity=False).hexdigest()
+        except OSError:
+            pass
+
+    return files_state
+
+
+def get_config_hash() -> tuple[str, dict]:
+    state = get_config_files_state()
+    combined = hashlib.md5(usedforsecurity=False)
+    for f in sorted(state.keys()):
+        combined.update(f.name.encode("utf-8"))
+        combined.update(state[f].encode("utf-8"))
+    return combined.hexdigest(), state
+
+
+def load_config():
+    config = configparser.ConfigParser(
+        interpolation=None,
+        delimiters=("=",),
+        comment_prefixes=("#", ";"),
+        allow_no_value=True
+    )
+    config.optionxform = str
+
+    config_files = []
+    if CONFIG_FILE.is_file():
+        config_files.append(CONFIG_FILE)
+    if CONF_D_DIR.is_dir():
+        config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
+
+    if config_files:
+        try:
+            config.read(config_files, encoding="utf-8")
+        except (OSError, configparser.Error, UnicodeDecodeError) as e:
+            logger.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
+
+    source_dir = Path(config.get("general", "source_dir", fallback=os.getenv("SOURCE_DIR", "/media/out")))
+    target_dir = Path(config.get("general", "target_dir", fallback=os.getenv("TARGET_DIR", "/media/in")))
+
+    allowed_raw = config.get(
+        "mover", "allowed_extensions",
+        fallback=os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.webm")
+    )
+    allowed_extensions = {
+        e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
+        for e in allowed_raw.split(",") if e.strip()
+    }
+
+    temp_raw = config.get(
+        "mover", "temp_extensions",
+        fallback=os.getenv("TEMP_EXTENSIONS", ".part,.ytdl,.tmp,.temp")
+    )
+    temp_extensions = {
+        e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
+        for e in temp_raw.split(",") if e.strip()
+    }
+
+    log_level = config.get("general", "log_level", fallback=os.getenv("LOG_LEVEL", "INFO")).upper()
+
+    cleanup_raw = config.get(
+        "mover", "cleanup_empty_dirs",
+        fallback=os.getenv("CLEANUP_EMPTY_DIRS", "false")
+    )
+    cleanup_empty_dirs_enabled = cleanup_raw.strip().lower() in ("1", "true", "yes")
+
+    return {
+        "source_dir": source_dir,
+        "target_dir": target_dir,
+        "allowed_extensions": allowed_extensions,
+        "temp_extensions": temp_extensions,
+        "log_level": log_level,
+        "cleanup_empty_dirs": cleanup_empty_dirs_enabled,
+        "config_obj": config
+    }

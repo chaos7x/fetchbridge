@@ -4,17 +4,27 @@ FROM alpine:3
 ENV PYTHONUNBUFFERED=1
 
 # ==========================================
-# LAYER 1: System-Pakete installieren
+# LAYER 1: System-Pakete + inotify via Pip
 # ==========================================
+# WICHTIG: Alpines apk-Paket "py3-inotify" packt tatsächlich ein anderes,
+# unpassendes Projekt (pyinotify statt inotify von dsoprea) - das Skript
+# importiert `inotify.adapters`, was dieses Paket nicht bereitstellt.
+# Daher hier bewusst per pip statt apk, in einen eigenen --target-Ordner
+# (nicht gemeinsam mit fetchbridge selbst - zwei pip-Installationen in
+# denselben Zielordner haben bei einem Schwesterprojekt (tw-recorder) dazu
+# geführt, dass der zweite Aufruf keinen Entry-Point mehr erzeugte).
 RUN apk add --no-cache \
     python3 \
-    py3-inotify \
+    py3-pip \
+    py3-setuptools \
     libcom_err \
     mc \
-    ca-certificates
+    ca-certificates \
+    && pip install --break-system-packages --no-cache-dir --no-build-isolation --target=/usr/local/lib/inotify inotify
 
-# Arbeitsverzeichnis setzen (Metadaten-Layer)
 WORKDIR /app
+ENV HOME=/app
+ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
 
 # ==========================================
 # LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
@@ -22,26 +32,26 @@ WORKDIR /app
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 3: Skripte & Configs kopieren, ausführen & verlinken
+# LAYER 3: fetchbridge-Package installieren
+# ==========================================
+COPY pyproject.toml /app/pyproject.toml
+COPY src/ /app/src/
+RUN pip install --break-system-packages --no-deps --no-cache-dir --no-build-isolation --target=/usr/local/lib/fetchbridge . \
+    && rm -rf /app/pyproject.toml /app/src /app/build
+
+# ==========================================
+# LAYER 4: Skripte, Configs & Entry-Point
 # ==========================================
 COPY --chmod=644 bashrc /etc/global.bashrc
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=755 fetchbridge.py /usr/local/bin/fetchbridge
 COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
+RUN cp /usr/local/lib/fetchbridge/bin/fetchbridge /usr/local/bin/fetchbridge
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
-    && ln -s /etc/global.bashrc /tmp/.bashrc \
+RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
 
-ENV HOME=/app
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD sh -c '\
-    if [ -f /app/fetchbridge ]; then \
-      exec /app/fetchbridge --healthcheck; \
-    else \
-      exec /usr/local/bin/fetchbridge --healthcheck; \
-    fi'
+  CMD ["fetchbridge", "--healthcheck"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
