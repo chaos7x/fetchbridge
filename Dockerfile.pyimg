@@ -4,47 +4,45 @@ FROM python:3-slim
 ENV PYTHONUNBUFFERED=1
 
 # ==========================================
-# LAYER 1: System-Pakete installieren
+# LAYER 1: System-Pakete
 # ==========================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcom-err2 \
     mc \
     && rm -rf /var/lib/apt/lists/*
 
-# Arbeitsverzeichnis setzen (Metadaten-Layer)
 WORKDIR /app
+ENV HOME=/app
 
 # ==========================================
-# LAYER 2: Python-Abhängigkeiten über pip installieren
-# ==========================================
-RUN pip install --no-cache-dir --break-system-packages inotify
-
-# ==========================================
-# LAYER 3: Verzeichnisse anlegen & Berechtigungen setzen
+# LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
 # ==========================================
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 4: Skripte & Configs kopieren, ausführen & verlinken
+# LAYER 3: fetchbridge-Package (inkl. inotify-Dependency) installieren
+# ==========================================
+# Ein einziger `pip install .` reicht hier: inotify ist in pyproject.toml als
+# reguläre Dependency deklariert, pip löst sie automatisch mit auf - anders
+# als bei Debian/Alpine gibt's hier keinen Grund, es separat via apt/apk zu
+# holen, da dieses Image ohnehin komplett auf pip aufbaut.
+COPY pyproject.toml /app/pyproject.toml
+COPY src/ /app/src/
+RUN pip install --no-cache-dir --break-system-packages . \
+    && rm -rf /app/pyproject.toml /app/src /app/build
+
+# ==========================================
+# LAYER 4: Skripte & Configs kopieren
 # ==========================================
 COPY --chmod=644 bashrc /etc/global.bashrc
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=755 fetchbridge.py /usr/local/bin/fetchbridge
 COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/fetchbridge \
-    && ln -s /etc/global.bashrc /tmp/.bashrc \
+RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
 
-ENV HOME=/app
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD sh -c '\
-    if [ -f /app/fetchbridge ]; then \
-      exec /app/fetchbridge --healthcheck; \
-    else \
-      exec /usr/local/bin/fetchbridge --healthcheck; \
-    fi'
+  CMD ["fetchbridge", "--healthcheck"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 

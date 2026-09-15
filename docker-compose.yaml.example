@@ -13,15 +13,15 @@ services:
       - .env
 
 # ==========================================
-# Healthcheck (optional), ist aktiviert
+# Healthcheck-Override (optional) - im Image ist bereits eine HEALTHCHECK-
+# Instruktion hinterlegt, hier nur relevant für andere Intervalle/Timeouts.
 # ==========================================
 #    healthcheck:
-#      test: ["CMD", "python3", "/app/fetchbridge", "--healthcheck"]
+#      test: ["CMD", "fetchbridge", "--healthcheck"]
 #      interval: 30s
 #      timeout: 5s
 #      start_period: 15s
-#
-      retries: 3
+#      retries: 3
     volumes:
       # Optionales App-Volume (bei Bedarf einkommentieren)
       # - app:/app:ro
