@@ -1,6 +1,7 @@
 """Konfiguration & Standard-Pfade."""
 
 import configparser
+import contextlib
 import hashlib
 import logging
 import os
@@ -31,10 +32,8 @@ def get_config_files_state() -> dict:
         config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
 
     for f in config_files:
-        try:
+        with contextlib.suppress(OSError):
             files_state[f] = hashlib.md5(f.read_bytes(), usedforsecurity=False).hexdigest()
-        except OSError:
-            pass
 
     return files_state
 
