@@ -1,18 +1,41 @@
+# ==========================================
+# STUFE 1: Builder - installiert fetchbridge isoliert per pip
+# ==========================================
+# Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
+# nur das fertig installierte Package wird per COPY --from übernommen.
+FROM debian:trixie-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY pyproject.toml /build/pyproject.toml
+COPY src/ /build/src/
+# --target statt eines normalen `pip install` in system site-packages:
+# liefert reine Python-Dateien flach in einem eigenen Ordner, den die finale
+# Stage 1:1 übernehmen kann. --no-deps, da inotify unter Debian bewusst über
+# apt (python3-inotify) kommt, nicht über pip (siehe LAYER 2 der Final-Stage).
+RUN pip install --break-system-packages --no-deps --no-cache-dir /build --target=/install
+
+# ==========================================
+# STUFE 2: FINAL STAGE (schlankes Laufzeit-Image, kein pip/setuptools)
+# ==========================================
 FROM debian:trixie-slim
 
 # Ungepufferte Python-Ausgabe für Docker Logs erzwingen
 ENV PYTHONUNBUFFERED=1
 
 # ==========================================
-# LAYER 1: System-Pakete + Pip-Installation
+# LAYER 1: System-Pakete
 # ==========================================
 # python3-inotify ist unter Debian das korrekte Paket (importiert als
-# `inotify.adapters`) - kein --target nötig, Debians python3-pip installiert
-# bereits automatisch nach /usr/local (FHS-konform gepatcht).
+# `inotify.adapters`). Bewusst OHNE pip/setuptools - die werden nur im
+# Builder (STUFE 1) gebraucht.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    python3-pip \
-    python3-setuptools \
     python3-inotify \
     libcom-err2 \
     mc \
@@ -32,12 +55,16 @@ ENV HOME=/app
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 1777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 3: fetchbridge-Package installieren
+# LAYER 3: fetchbridge-Package aus dem Builder übernehmen
 # ==========================================
-COPY pyproject.toml /app/pyproject.toml
-COPY src/ /app/src/
-RUN pip install --no-cache-dir --break-system-packages --no-deps . \
-    && rm -rf /app/pyproject.toml /app/src /app/build
+# /install/bin und /install/fetchbridge* kommen fertig installiert aus der
+# Builder-Stage (STUFE 1) - kein pip-Aufruf mehr in dieser Stage. PYTHONPATH
+# macht das Package unabhängig von distro-spezifischen site-packages-
+# Konventionen auffindbar.
+COPY --from=builder /install/bin/fetchbridge /usr/local/bin/fetchbridge
+COPY --from=builder /install/fetchbridge /usr/local/lib/fetchbridge/fetchbridge
+COPY --from=builder /install/fetchbridge-*.dist-info /usr/local/lib/fetchbridge/fetchbridge.dist-info
+ENV PYTHONPATH=/usr/local/lib/fetchbridge
 
 # ==========================================
 # LAYER 4: Skripte & Configs kopieren
