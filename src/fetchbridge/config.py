@@ -18,6 +18,13 @@ ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
 CLEANUP_EMPTY_DIRS = False
+# Absicherung gegen den seltenen Fall, dass ein Schreiber die Datei nach dem
+# IN_CLOSE_WRITE-Event erneut öffnet (z.B. ein Tool mit Flush-Close-Reopen-
+# Verhalten) - process_file() vergleicht die Dateigröße STABILITY_MAX_CHECKS
+# mal im Abstand von STABILITY_CHECK_INTERVAL Sekunden, bevor verschoben/
+# kopiert wird.
+STABILITY_CHECK_INTERVAL = float(os.getenv("STABILITY_CHECK_INTERVAL", "2"))
+STABILITY_MAX_CHECKS = int(os.getenv("STABILITY_MAX_CHECKS", "10"))
 
 CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
 
@@ -97,6 +104,15 @@ def load_config():
     )
     cleanup_empty_dirs_enabled = cleanup_raw.strip().lower() in ("1", "true", "yes")
 
+    stability_check_interval = float(config.get(
+        "mover", "stability_check_interval",
+        fallback=os.getenv("STABILITY_CHECK_INTERVAL", "2")
+    ))
+    stability_max_checks = int(config.get(
+        "mover", "stability_max_checks",
+        fallback=os.getenv("STABILITY_MAX_CHECKS", "10")
+    ))
+
     return {
         "source_dir": source_dir,
         "target_dir": target_dir,
@@ -104,5 +120,7 @@ def load_config():
         "temp_extensions": temp_extensions,
         "log_level": log_level,
         "cleanup_empty_dirs": cleanup_empty_dirs_enabled,
+        "stability_check_interval": stability_check_interval,
+        "stability_max_checks": stability_max_checks,
         "config_obj": config
     }

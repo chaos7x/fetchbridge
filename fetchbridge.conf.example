@@ -28,3 +28,10 @@
 # Kommagetrennte Liste von Endungen, die als "noch nicht fertig" gelten
 # und ignoriert werden
 # temp_extensions = .part,.ytdl,.tmp,.temp
+
+# Bevor eine Datei verschoben/kopiert wird, prüft fetchbridge per
+# Dateigrößenvergleich, ob sie noch von einem anderen Prozess beschrieben
+# wird (Absicherung zusätzlich zum IN_CLOSE_WRITE-Event, z.B. gegen
+# Flush-Close-Reopen-Verhalten oder verzögerte Events auf Netzwerk-Mounts).
+# stability_check_interval = 2
+# stability_max_checks = 10
