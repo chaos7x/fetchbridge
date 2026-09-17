@@ -22,3 +22,9 @@ def config():
 def mover():
     from fetchbridge import mover
     return mover
+
+
+@pytest.fixture(scope="session")
+def healthcheck():
+    from fetchbridge import healthcheck
+    return healthcheck
