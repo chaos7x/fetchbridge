@@ -34,7 +34,7 @@ def main():
         help="Prüft die Heartbeat-Datei und beendet sich mit Exit-Code 0 (healthy) oder 1 (unhealthy). Für Docker HEALTHCHECK."
     )
     parser.add_argument(
-        "-V", "--version",
+        "-v", "--version",
         action="version",
         version=f"{__title__} v{__version__}"
     )
