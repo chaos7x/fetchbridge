@@ -26,6 +26,8 @@ def run_daemon():
     config.ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
     config.TEMP_EXTENSIONS = cfg["temp_extensions"]
     config.CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
+    config.STABILITY_CHECK_INTERVAL = cfg["stability_check_interval"]
+    config.STABILITY_MAX_CHECKS = cfg["stability_max_checks"]
     logging.getLogger().setLevel(cfg["log_level"])
 
     logger.info("Starte Inotify-Fetchbridge mit RO/RW-Erkennung...")
@@ -104,6 +106,8 @@ def run_daemon():
                         config.ALLOWED_EXTENSIONS = cfg["allowed_extensions"]
                         config.TEMP_EXTENSIONS = cfg["temp_extensions"]
                         config.CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
+                        config.STABILITY_CHECK_INTERVAL = cfg["stability_check_interval"]
+                        config.STABILITY_MAX_CHECKS = cfg["stability_max_checks"]
                         logging.getLogger().setLevel(cfg["log_level"])
                         config.TARGET_DIR.mkdir(parents=True, exist_ok=True)
 

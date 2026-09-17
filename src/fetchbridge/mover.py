@@ -3,11 +3,51 @@
 import logging
 import os
 import shutil
+import time
 from pathlib import Path
 
 from fetchbridge import config
 
 logger = logging.getLogger(__name__)
+
+
+def is_file_stable(filepath: Path) -> bool:
+    """
+    Prüft per Dateigrößenvergleich über die Zeit, ob eine Datei noch von
+    einem anderen Prozess (z.B. tw-recorders ffmpeg-Remux) beschrieben wird.
+
+    Eigentlich sorgt schon die Watch-Maske in daemon.py (IN_CLOSE_WRITE /
+    IN_MOVED_TO) dafür, dass process_file() erst nach einem abgeschlossenen
+    Schreibvorgang aufgerufen wird - diese Prüfung ist die zusätzliche
+    Absicherung für den seltenen Fall, dass ein Schreiber die Datei danach
+    noch einmal öffnet (Flush-Close-Reopen-Verhalten), oder für Netzwerk-
+    Mounts, bei denen inotify-Events verzögert/unzuverlässig ankommen.
+    """
+    last_size = -1
+    for check_num in range(config.STABILITY_MAX_CHECKS):
+        try:
+            current_size = filepath.stat().st_size
+        except OSError as e:
+            logger.error(f"Fehler bei Dateigrößenprüfung von {filepath}: {e}")
+            return False
+
+        if last_size != -1 and current_size == last_size:
+            return True
+
+        if last_size != -1:
+            logger.info(
+                f"Datei wächst noch ({current_size / (1024 * 1024):.1f} MB): {filepath.name} "
+                f"- warte... ({check_num + 1}/{config.STABILITY_MAX_CHECKS})"
+            )
+
+        last_size = current_size
+        time.sleep(config.STABILITY_CHECK_INTERVAL)
+
+    logger.warning(
+        f"Datei wird nach {config.STABILITY_MAX_CHECKS * config.STABILITY_CHECK_INTERVAL:.0f}s "
+        f"immer noch geschrieben, überspringe vorerst: {filepath.name}"
+    )
+    return False
 
 
 def is_writable(path: Path) -> bool:
@@ -62,6 +102,9 @@ def process_file(filepath: Path):
 
     if ext not in config.ALLOWED_EXTENSIONS:
         logger.debug(f"Ignoriere nicht unterstützte Endung '{ext}': {filepath.name}")
+        return
+
+    if not is_file_stable(filepath):
         return
 
     filename = filepath.name
