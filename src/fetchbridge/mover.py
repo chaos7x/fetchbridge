@@ -41,6 +41,15 @@ def cleanup_empty_dirs(directory: Path):
 
 
 def process_file(filepath: Path):
+    # Symlinks explizit ablehnen, BEVOR is_file() (folgt Symlinks!) geprüft
+    # wird: shutil.copy2()/shutil.move() folgen Symlinks standardmäßig und
+    # würden den Inhalt des Linkziels nach TARGET_DIR kopieren/verschieben -
+    # ein Symlink mit erlaubter Endung (z.B. "x.mkv -> /etc/shadow") in
+    # SOURCE_DIR wäre damit ein Primitive für beliebigen Dateizugriff.
+    if filepath.is_symlink():
+        logger.warning(f"⚠️ Ignoriere Symlink (Sicherheitsrisiko, wird nicht verfolgt): {filepath}")
+        return
+
     if not filepath.is_file():
         logger.debug(f"Ignoriere (Keine reguläre Datei oder existiert nicht mehr): {filepath}")
         return
