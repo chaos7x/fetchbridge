@@ -112,12 +112,12 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 
 ### CLI & Parameter
 ```text
-fetchbridge [-h] [-D] [--healthcheck] [-V]
+fetchbridge [-h] [-D] [--healthcheck] [-v]
 ```
 
 * `-D`, `--daemon` — Dämon-Modus: Dauerhafte Ordnerüberwachung (Standardmodus im Container, siehe `entrypoint.sh`)
 * `--healthcheck` — Prüft die Heartbeat-Datei, Exit-Code 0 (healthy) oder 1 (unhealthy). Für Docker `HEALTHCHECK` gedacht, läuft unabhängig vom Dämon-Prozess.
-* `-V`, `--version` — Versionsnummer anzeigen
+* `-v`, `--version` — Versionsnummer anzeigen
 
 ### Umgebungsvariablen
 
