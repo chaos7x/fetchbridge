@@ -1,3 +1,25 @@
+# ==========================================
+# STUFE 1: Builder - installiert fetchbridge (inkl. inotify-Dependency)
+# isoliert per pip
+# ==========================================
+# Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
+# nur das fertig installierte Package wird per COPY --from übernommen.
+FROM python:3-slim AS builder
+
+WORKDIR /build
+COPY pyproject.toml /build/pyproject.toml
+COPY src/ /build/src/
+# Ein einziger `pip install .` reicht: inotify ist in pyproject.toml als
+# reguläre Dependency deklariert, pip löst sie automatisch mit auf. inotify
+# deklariert selbst fälschlich "build" (samt packaging/pyproject_hooks) als
+# Laufzeit-Dependency, obwohl nirgends importiert (nur zum Wheel-Bauen
+# gebraucht) - deshalb gezielte Übernahme einzelner Pakete in der Final-Stage
+# statt des kompletten /install-Ordners (siehe LAYER 2 dort).
+RUN pip install --no-cache-dir --break-system-packages --target=/install .
+
+# ==========================================
+# STUFE 2: FINAL STAGE (schlankes Laufzeit-Image, kein pip/setuptools)
+# ==========================================
 FROM python:3-slim
 
 # Ungepufferte Python-Ausgabe für Docker Logs erzwingen
@@ -25,16 +47,14 @@ ENV HOME=/app
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 1777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 3: fetchbridge-Package (inkl. inotify-Dependency) installieren
+# LAYER 3: fetchbridge + inotify aus dem Builder übernehmen
 # ==========================================
-# Ein einziger `pip install .` reicht hier: inotify ist in pyproject.toml als
-# reguläre Dependency deklariert, pip löst sie automatisch mit auf - anders
-# als bei Debian/Alpine gibt's hier keinen Grund, es separat via apt/apk zu
-# holen, da dieses Image ohnehin komplett auf pip aufbaut.
-COPY pyproject.toml /app/pyproject.toml
-COPY src/ /app/src/
-RUN pip install --no-cache-dir --break-system-packages . \
-    && rm -rf /app/pyproject.toml /app/src /app/build
+COPY --from=builder /install/bin/fetchbridge /usr/local/bin/fetchbridge
+COPY --from=builder /install/fetchbridge /usr/local/lib/fetchbridge/fetchbridge
+COPY --from=builder /install/fetchbridge-*.dist-info /usr/local/lib/fetchbridge/fetchbridge.dist-info
+COPY --from=builder /install/inotify /usr/local/lib/fetchbridge/inotify
+COPY --from=builder /install/inotify-*.dist-info /usr/local/lib/fetchbridge/inotify.dist-info
+ENV PYTHONPATH=/usr/local/lib/fetchbridge
 
 # ==========================================
 # LAYER 4: Skripte & Configs kopieren

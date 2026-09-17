@@ -1,11 +1,17 @@
-FROM alpine:3
-
-# Ungepufferte Python-Ausgabe für Docker Logs erzwingen
-ENV PYTHONUNBUFFERED=1
-
 # ==========================================
-# LAYER 1: System-Pakete + inotify via Pip
+# STUFE 1: Builder - installiert fetchbridge + inotify isoliert per pip
 # ==========================================
+# Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
+# nur die fertig installierten Pakete werden per COPY --from übernommen.
+FROM alpine:3 AS builder
+
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    py3-setuptools
+
+WORKDIR /build
+
 # WICHTIG: Alpines apk-Paket "py3-inotify" packt tatsächlich ein anderes,
 # unpassendes Projekt (pyinotify statt inotify von dsoprea) - das Skript
 # importiert `inotify.adapters`, was dieses Paket nicht bereitstellt.
@@ -13,22 +19,37 @@ ENV PYTHONUNBUFFERED=1
 # (nicht gemeinsam mit fetchbridge selbst - zwei pip-Installationen in
 # denselben Zielordner haben bei einem Schwesterprojekt (tw-recorder) dazu
 # geführt, dass der zweite Aufruf keinen Entry-Point mehr erzeugte).
+# --no-deps: inotify deklariert fälschlich "build" (samt dessen eigenen
+# Abhängigkeiten packaging/pyproject_hooks) als Laufzeit-Dependency, obwohl
+# es nirgends importiert wird (nur zum Wheel-Bauen gebraucht) - ohne
+# --no-deps würde das ungenutzt in den Ordner mitinstalliert.
+RUN pip install --break-system-packages --no-deps --no-cache-dir --no-build-isolation --target=/install/inotify inotify
+
+COPY pyproject.toml /build/pyproject.toml
+COPY src/ /build/src/
+RUN pip install --break-system-packages --no-deps --no-cache-dir --no-build-isolation --target=/install/fetchbridge /build
+
+# ==========================================
+# STUFE 2: FINAL STAGE (schlankes Laufzeit-Image, kein pip/setuptools)
+# ==========================================
+FROM alpine:3
+
+# Ungepufferte Python-Ausgabe für Docker Logs erzwingen
+ENV PYTHONUNBUFFERED=1
+
 RUN apk add --no-cache \
     bash \
     python3 \
-    py3-pip \
-    py3-setuptools \
     libcom_err \
     mc \
-    ca-certificates \
-    && pip install --break-system-packages --no-cache-dir --no-build-isolation --target=/usr/local/lib/inotify inotify
+    ca-certificates
 
 WORKDIR /app
 ENV HOME=/app
 ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
 
 # ==========================================
-# LAYER 2: Verzeichnisse anlegen & Berechtigungen setzen
+# LAYER 1: Verzeichnisse anlegen & Berechtigungen setzen
 # ==========================================
 # 1777 statt 777: die Laufzeit-UID ist unbekannt (frei wählbar via `docker run -u`,
 # um Berechtigungskonflikte mit host-gemounteten Verzeichnissen zu vermeiden),
@@ -38,20 +59,18 @@ ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
 RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 1777 /media/in /media/out /log
 
 # ==========================================
-# LAYER 3: fetchbridge-Package installieren
+# LAYER 2: fetchbridge + inotify aus dem Builder übernehmen
 # ==========================================
-COPY pyproject.toml /app/pyproject.toml
-COPY src/ /app/src/
-RUN pip install --break-system-packages --no-deps --no-cache-dir --no-build-isolation --target=/usr/local/lib/fetchbridge . \
-    && rm -rf /app/pyproject.toml /app/src /app/build
+COPY --from=builder /install/fetchbridge /usr/local/lib/fetchbridge
+COPY --from=builder /install/inotify /usr/local/lib/inotify
+COPY --from=builder /install/fetchbridge/bin/fetchbridge /usr/local/bin/fetchbridge
 
 # ==========================================
-# LAYER 4: Skripte, Configs & Entry-Point
+# LAYER 3: Skripte, Configs & Entry-Point
 # ==========================================
 COPY --chmod=644 bashrc /etc/global.bashrc
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
-RUN cp /usr/local/lib/fetchbridge/bin/fetchbridge /usr/local/bin/fetchbridge
 
 RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
