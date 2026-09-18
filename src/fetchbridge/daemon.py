@@ -83,8 +83,13 @@ def run_daemon():
     config.CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
     config.STABILITY_CHECK_INTERVAL = cfg["stability_check_interval"]
     config.STABILITY_MAX_CHECKS = cfg["stability_max_checks"]
-    setup_logging(cfg)
+    # Log-Level VOR setup_logging() setzen: setup_logging() selbst loggt am
+    # Ende eine INFO-Zusammenfassung, welches Log-System gerade aktiv ist
+    # (aktive Handler + Grund) - kommt die Level-Zuweisung erst danach, steht
+    # der Root-Logger währenddessen noch auf dem Python-Default WARNING und
+    # verschluckt genau diese Meldung stillschweigend.
     logging.getLogger().setLevel(cfg["log_level"])
+    setup_logging(cfg)
 
     logger.info("Starte Inotify-Fetchbridge mit RO/RW-Erkennung...")
 
