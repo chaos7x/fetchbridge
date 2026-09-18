@@ -69,6 +69,15 @@ pip install --break-system-packages --no-deps .
 
 Danach steht der Befehl `fetchbridge` systemweit zur Verfügung (`fetchbridge --version` zum Testen).
 
+### Alternative: Fertiges Debian-Paket (.deb)
+
+Jedes [GitHub Release](https://github.com/chaos7x/fetchbridge/releases) enthält zusätzlich ein `fetchbridge_<version>_amd64.deb` als Anhang - keine manuelle `pip`-Installation nötig, `apt`/`dpkg` löst die Abhängigkeit (`python3-inotify`) automatisch mit auf:
+
+```bash
+wget https://github.com/chaos7x/fetchbridge/releases/latest/download/fetchbridge_<version>_amd64.deb
+apt install ./fetchbridge_<version>_amd64.deb
+```
+
 ---
 
 ## 🐳 Docker-Image-Varianten
