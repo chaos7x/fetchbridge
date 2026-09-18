@@ -3,20 +3,30 @@ log/
 videos/
 oauth/
 app/
+config/
+tests/
+
+# Lokale Tooling-Konfiguration ausschließen
+.github/agents/
 
 # Backup- und Sicherungsdateien ausschließen
 *.sav
 *.bak
 *.new
+*.diff
+*.patch
+*.log
 
 # Python Bytecode und Cache ausschließen
 __pycache__/
 *.pyc
-docker-compose.override.yaml
 
-# Env datei ausschließen
-.env
+# Docker-Compose-Override und lokale Compose-Datei ausschließen
+docker-compose.override.yaml
 docker-compose.yaml
+
+# Environment- und Secrets-Dateien ausschließen
+.env
 .secrets
 
 build/
