@@ -84,6 +84,48 @@ class TestProcessFileSymlinkRejection:
         assert not video.exists()
 
 
+class TestMoveFile:
+    """
+    _move_file() versucht zuerst os.rename() (atomar, unabhängig von der
+    Dateigröße) und fällt erst bei einem Fehlschlag auf Kopieren+Löschen
+    zurück - anders als shutil.move(), das einen fehlschlagenden rename()
+    still verschluckt, loggt _move_file() dabei den konkreten Grund.
+    """
+
+    def test_rename_succeeds_without_fallback_warning(self, mover, tmp_path, caplog):
+        src = tmp_path / "video.mkv"
+        dst = tmp_path / "moved.mkv"
+        src.write_bytes(b"fake video content")
+
+        with caplog.at_level("WARNING"):
+            mover._move_file(src, dst)
+
+        assert dst.read_bytes() == b"fake video content"
+        assert not src.exists()
+        assert not any("os.rename() fehlgeschlagen" in r.message for r in caplog.records)
+
+    def test_falls_back_to_copy_and_logs_reason_when_rename_fails(
+        self, mover, tmp_path, monkeypatch, caplog
+    ):
+        """Regression: ein fehlschlagender rename() (z.B. EXDEV) darf nicht unbemerkt bleiben."""
+        src = tmp_path / "video.mkv"
+        dst = tmp_path / "moved.mkv"
+        src.write_bytes(b"fake video content")
+
+        def fake_rename(_src, _dst):
+            raise OSError(18, "Invalid cross-device link")
+
+        monkeypatch.setattr(mover.os, "rename", fake_rename)
+
+        with caplog.at_level("WARNING"):
+            mover._move_file(src, dst)
+
+        assert dst.read_bytes() == b"fake video content"
+        assert not src.exists()
+        assert any("os.rename() fehlgeschlagen" in r.message for r in caplog.records)
+        assert any("errno=18" in r.message for r in caplog.records)
+
+
 class TestIsFileStable:
     def test_stable_file_returns_true_after_one_wait(self, mover, config, tmp_path, monkeypatch):
         video = tmp_path / "video.mkv"
