@@ -1,0 +1,15 @@
+[Unit]
+Description=fetchbridge - Inotify-basierte Bridge zwischen Verzeichnissen
+Documentation=https://github.com/chaos7x/fetchbridge
+After=network.target local-fs.target
+
+[Service]
+Type=simple
+User=fetchbridge
+Group=fetchbridge
+ExecStart=/usr/bin/fetchbridge -D
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
