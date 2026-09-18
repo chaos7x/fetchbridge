@@ -50,6 +50,32 @@ def is_file_stable(filepath: Path) -> bool:
     return False
 
 
+def _move_file(src: Path, dst: Path):
+    """
+    Versucht zuerst einen atomaren os.rename() - der hängt nur einen
+    Verzeichniseintrag um und ist im Mikrosekundenbereich fertig, unabhängig
+    von der Dateigröße. shutil.move() macht intern zwar dasselbe, fängt
+    einen fehlschlagenden rename() dabei aber still ab und fällt unbemerkt
+    auf Kopieren+Löschen zurück - das Log sieht in beiden Fällen identisch
+    aus, obwohl Letzteres bei großen Dateien um Größenordnungen länger
+    dauert. Hier wird der konkrete Fehlschlag-Grund stattdessen geloggt
+    (z.B. EXDEV bei unterschiedlichen Mounts trotz vermeintlich gleicher
+    Partition, oder fehlende Schreibrechte auf TARGET_DIR, die
+    is_writable() nie prüft - die schaut nur auf die Quelle).
+    """
+    try:
+        os.rename(src, dst)
+    except OSError as e:
+        logger.warning(
+            f"os.rename() fehlgeschlagen ({e.strerror}, errno={e.errno}) - "
+            f"vermutlich unterschiedliche Mounts trotz vermeintlich gleicher "
+            f"Partition, oder fehlende Schreibrechte auf dem Zielverzeichnis. "
+            f"Falle zurück auf Kopieren+Löschen (langsamer): {src.name}"
+        )
+        shutil.copy2(str(src), str(dst))
+        src.unlink()
+
+
 def is_writable(path: Path) -> bool:
     parent = path.parent if path.is_file() else path
     writable = os.access(parent, os.W_OK)
@@ -122,7 +148,7 @@ def process_file(filepath: Path):
     try:
         if is_writable(filepath):
             logger.info(f"🚚 Verschiebe (RW): {filepath.name} -> {dest_path.name}")
-            shutil.move(str(filepath), str(dest_path))
+            _move_file(filepath, dest_path)
             logger.info(f"✅ Verschieben erfolgreich: {dest_path.name}")
             if config.CLEANUP_EMPTY_DIRS:
                 cleanup_empty_dirs(source_parent)
