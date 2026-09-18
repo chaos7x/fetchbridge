@@ -90,6 +90,21 @@ def get_config_hash() -> tuple[str, dict]:
     return combined.hexdigest(), state
 
 
+def _get(config_obj, section, option, fallback):
+    """
+    Wie config_obj.get(), aber robust gegen einen Schlüssel ohne "= wert"
+    (z.B. "log_level" statt "log_level = INFO") - allow_no_value=True lässt
+    das als gültige Syntax durch, ConfigParser.get() liefert dafür None
+    zurück und ignoriert dabei den fallback (der nur greift, wenn Section/
+    Option komplett fehlen, nicht wenn der Wert nur leer ist). Ungeprüft
+    würde das bei jedem nachgelagerten .strip()/.upper()/int()/float()/
+    Path() mit einem AttributeError/TypeError crashen (siehe der in
+    tw-recorder gefixte, identische Bug in dessen [channels]-Sektion).
+    """
+    value = config_obj.get(section, option, fallback=fallback)
+    return fallback if value is None else value
+
+
 def load_config():
     config = configparser.ConfigParser(
         interpolation=None,
@@ -111,43 +126,43 @@ def load_config():
         except (OSError, configparser.Error, UnicodeDecodeError) as e:
             logger.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
 
-    source_dir = Path(config.get("general", "source_dir", fallback=os.getenv("SOURCE_DIR", "/media/out")))
-    target_dir = Path(config.get("general", "target_dir", fallback=os.getenv("TARGET_DIR", "/media/in")))
+    source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", "/media/out")))
+    target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", "/media/in")))
 
-    allowed_raw = config.get(
-        "mover", "allowed_extensions",
-        fallback=os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.webm")
+    allowed_raw = _get(
+        config, "mover", "allowed_extensions",
+        os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.webm")
     )
     allowed_extensions = {
         e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
         for e in allowed_raw.split(",") if e.strip()
     }
 
-    temp_raw = config.get(
-        "mover", "temp_extensions",
-        fallback=os.getenv("TEMP_EXTENSIONS", ".part,.ytdl,.tmp,.temp")
+    temp_raw = _get(
+        config, "mover", "temp_extensions",
+        os.getenv("TEMP_EXTENSIONS", ".part,.ytdl,.tmp,.temp")
     )
     temp_extensions = {
         e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
         for e in temp_raw.split(",") if e.strip()
     }
 
-    log_level = config.get("general", "log_level", fallback=os.getenv("LOG_LEVEL", "INFO")).upper()
-    log_file = config.get("general", "log_file", fallback=os.getenv("LOG_FILE", "")).strip()
+    log_level = _get(config, "general", "log_level", os.getenv("LOG_LEVEL", "INFO")).upper()
+    log_file = _get(config, "general", "log_file", os.getenv("LOG_FILE", "")).strip()
 
-    cleanup_raw = config.get(
-        "mover", "cleanup_empty_dirs",
-        fallback=os.getenv("CLEANUP_EMPTY_DIRS", "false")
+    cleanup_raw = _get(
+        config, "mover", "cleanup_empty_dirs",
+        os.getenv("CLEANUP_EMPTY_DIRS", "false")
     )
     cleanup_empty_dirs_enabled = cleanup_raw.strip().lower() in ("1", "true", "yes")
 
-    stability_check_interval = float(config.get(
-        "mover", "stability_check_interval",
-        fallback=os.getenv("STABILITY_CHECK_INTERVAL", "2")
+    stability_check_interval = float(_get(
+        config, "mover", "stability_check_interval",
+        os.getenv("STABILITY_CHECK_INTERVAL", "2")
     ))
-    stability_max_checks = int(config.get(
-        "mover", "stability_max_checks",
-        fallback=os.getenv("STABILITY_MAX_CHECKS", "10")
+    stability_max_checks = int(_get(
+        config, "mover", "stability_max_checks",
+        os.getenv("STABILITY_MAX_CHECKS", "10")
     ))
 
     return {
