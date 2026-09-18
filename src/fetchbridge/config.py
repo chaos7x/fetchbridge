@@ -9,6 +9,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+APP_NAME = "fetchbridge"
+
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
@@ -131,6 +133,7 @@ def load_config():
     }
 
     log_level = config.get("general", "log_level", fallback=os.getenv("LOG_LEVEL", "INFO")).upper()
+    log_file = config.get("general", "log_file", fallback=os.getenv("LOG_FILE", "")).strip()
 
     cleanup_raw = config.get(
         "mover", "cleanup_empty_dirs",
@@ -153,6 +156,7 @@ def load_config():
         "allowed_extensions": allowed_extensions,
         "temp_extensions": temp_extensions,
         "log_level": log_level,
+        "log_file": log_file,
         "cleanup_empty_dirs": cleanup_empty_dirs_enabled,
         "stability_check_interval": stability_check_interval,
         "stability_max_checks": stability_max_checks,
