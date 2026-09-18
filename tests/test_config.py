@@ -1,8 +1,9 @@
 """
 Tests für load_config, get_config_hash, get_config_files_state,
-_is_dedicated_mount und _running_in_container (config.py).
+_is_dedicated_mount, _running_in_container und _get (config.py).
 """
 
+import configparser
 from pathlib import Path
 
 
@@ -133,6 +134,34 @@ class TestConfigHashing:
         assert config.get_config_files_state() == {}
 
 
+class TestGetHelper:
+    """
+    _get() muss den fallback auch dann liefern, wenn der Schlüssel zwar
+    existiert, aber keinen Wert hat ("key" statt "key = value") - reines
+    ConfigParser.get(fallback=...) ignoriert den fallback in diesem Fall
+    und liefert None (allow_no_value=True lässt diese Syntax zu).
+    """
+
+    def test_returns_value_when_present(self, config):
+        cfg_obj = configparser.ConfigParser(allow_no_value=True)
+        cfg_obj.read_string("[general]\nlog_level = DEBUG\n")
+
+        assert config._get(cfg_obj, "general", "log_level", "INFO") == "DEBUG"
+
+    def test_returns_fallback_when_section_missing(self, config):
+        cfg_obj = configparser.ConfigParser(allow_no_value=True)
+        cfg_obj.read_string("[general]\n")
+
+        assert config._get(cfg_obj, "general", "log_level", "INFO") == "INFO"
+
+    def test_returns_fallback_when_key_present_but_valueless(self, config):
+        """Der eigentlich gemeldete Bug: 'log_level' ohne '= wert'."""
+        cfg_obj = configparser.ConfigParser(allow_no_value=True)
+        cfg_obj.read_string("[general]\nlog_level\n")
+
+        assert config._get(cfg_obj, "general", "log_level", "INFO") == "INFO"
+
+
 class TestLoadConfig:
     def test_reads_general_and_mover_settings(self, config, tmp_path, monkeypatch):
         conf_d = tmp_path / "conf.d"
@@ -180,6 +209,27 @@ class TestLoadConfig:
         assert cfg["source_dir"] == Path("/media/out")
         assert cfg["target_dir"] == Path("/media/in")
         assert cfg["cleanup_empty_dirs"] is False
+
+    def test_forgotten_equals_sign_does_not_crash_and_uses_default(self, config, tmp_path, monkeypatch):
+        """
+        Regression: eine Zeile ganz ohne "= wert" (z.B. vergessenes "= INFO")
+        darf load_config() nicht mit AttributeError/TypeError crashen lassen -
+        derselbe Bug wie in tw-recorder's [channels]-Sektion, hier aber
+        potenziell an jeder einzelnen Config-Zeile, da allow_no_value=True
+        global für den ganzen Parser gilt.
+        """
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        main_conf = _write_main_config(tmp_path, "[general]\nlog_level\nsource_dir\n")
+        monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.delenv("SOURCE_DIR", raising=False)
+
+        cfg = config.load_config()
+
+        assert cfg["log_level"] == "INFO"
+        assert cfg["source_dir"] == Path("/media/out")
 
     def test_conf_d_overrides_main_config(self, config, tmp_path, monkeypatch):
         conf_d = tmp_path / "conf.d"
