@@ -78,6 +78,15 @@ wget https://github.com/chaos7x/fetchbridge/releases/latest/download/fetchbridge
 apt install ./fetchbridge_<version>_all.deb
 ```
 
+### Alternative: Standalone .pyz (kein pip/apt nötig)
+
+`./build-pyz.sh` baut aus `src/` ein einziges, selbst-enthaltenes `fetchbridge.pyz` samt `inotify` - läuft auf jedem System mit einem nackten `python3`, ganz ohne vorherige `pip install`/`apt install`:
+
+```bash
+./build-pyz.sh
+./fetchbridge.pyz --version
+```
+
 ---
 
 ## 🐳 Docker-Image-Varianten
