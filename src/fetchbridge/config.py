@@ -29,6 +29,40 @@ STABILITY_MAX_CHECKS = int(os.getenv("STABILITY_MAX_CHECKS", "10"))
 CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
 
 
+def _is_dedicated_mount(path: Path) -> bool:
+    """
+    Prüft, ob path ein eigener Mountpoint ist (Docker-Volume/Bind-Mount) statt
+    nur ein gewöhnliches Verzeichnis, das das Dockerfile per `mkdir -p` fest
+    ins Image gebacken hat (z.B. /media/in, /media/out, /log) - eine reine
+    is_dir()-Prüfung kann diese beiden Fälle nicht unterscheiden, da
+    `mkdir -p` das Verzeichnis auch ganz ohne jeden Mount anlegt (derselbe
+    Bug wie bei yt-upload/tw-recorder: Datei-Logging bzw. Datenverzeichnisse
+    liefen unbemerkt gegen den flüchtigen Container-Layer). Vergleicht dazu
+    die Geräte-ID (st_dev) von path und seinem Elternverzeichnis:
+    unterschiedliche st_dev bedeutet, dass dort tatsächlich ein
+    Volume/Bind-Mount eingehängt ist.
+    """
+    if not path.is_dir():
+        return False
+    try:
+        return path.stat().st_dev != path.parent.stat().st_dev
+    except OSError:
+        return False
+
+
+def _running_in_container() -> bool:
+    """
+    Erkennt zuverlässig, ob der Prozess in einem Docker-Container läuft -
+    unabhängig davon, ob SOURCE_DIR/TARGET_DIR echte Volumes sind (die legt
+    das Dockerfile selbst bedingungslos per `mkdir -p` an, siehe
+    _is_dedicated_mount()). /.dockerenv wird von Docker selbst in jedem
+    Container angelegt, unabhängig vom Image-Inhalt - im Gegensatz zu
+    /media/*, das dieses Projekt selbst im Dockerfile erzeugt und das
+    deshalb als Erkennungsmerkmal ungeeignet ist.
+    """
+    return Path("/.dockerenv").exists()
+
+
 def get_config_files_state() -> dict:
     files_state = {}
     config_files = []
