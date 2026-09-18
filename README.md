@@ -78,6 +78,12 @@ wget https://github.com/chaos7x/fetchbridge/releases/latest/download/fetchbridge
 apt install ./fetchbridge_<version>_all.deb
 ```
 
+Das Paket legt einen dedizierten Systemuser (`fetchbridge`) und einen systemd-Service an, startet ihn aber bewusst nicht automatisch - erst `/etc/fetchbridge/fetchbridge.conf` (bzw. `conf.d/`) anpassen, dann:
+
+```bash
+systemctl enable --now fetchbridge
+```
+
 ### Alternative: Standalone .pyz (kein pip/apt nötig)
 
 `./build-pyz.sh` baut aus `src/` ein einziges, selbst-enthaltenes `fetchbridge.pyz` samt `inotify` - läuft auf jedem System mit einem nackten `python3`, ganz ohne vorherige `pip install`/`apt install`:
