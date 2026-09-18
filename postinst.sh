@@ -14,4 +14,12 @@ if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
 fi
 
+echo ""
+echo "fetchbridge wurde installiert, der systemd-Service ist aber noch NICHT aktiviert."
+echo "Bitte zuerst /etc/fetchbridge/fetchbridge.conf (source_dir/target_dir) anpassen,"
+echo "dann den Dienst manuell aktivieren und starten:"
+echo ""
+echo "    systemctl enable --now fetchbridge"
+echo ""
+
 exit 0
