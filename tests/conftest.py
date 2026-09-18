@@ -34,3 +34,9 @@ def healthcheck():
 def daemon():
     from fetchbridge import daemon
     return daemon
+
+
+@pytest.fixture(scope="session")
+def logging_setup():
+    from fetchbridge import logging_setup
+    return logging_setup

@@ -13,6 +13,14 @@
 # Log-Level: DEBUG, INFO, WARNING, ERROR
 # log_level = INFO
 
+# Fester Pfad für die rotierende Logdatei (max. 10 MB, 5 Backups). Ohne
+# diese Angabe wird automatisch geloggt, sobald /log tatsächlich als
+# Docker-Volume gemountet ist (reines Vorhandensein des Verzeichnisses
+# reicht nicht - das Dockerfile legt es auch ganz ohne Mount an) oder ein
+# klassischer Syslog-Daemon läuft - sonst nur nach stdout (journald/docker
+# logs erfassen das bereits).
+# log_file = /log/fetchbridge.log
+
 # Quellverzeichnis, das überwacht wird (Änderung erfordert Neustart des
 # Fetchbridge-Prozesses, da InotifyTree fest an den Startpfad gebunden ist)
 # source_dir = /media/out

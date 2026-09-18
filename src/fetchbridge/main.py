@@ -1,24 +1,20 @@
 """CLI-Einstiegspunkt: Argument-Parsing und Moduswahl."""
 
 import argparse
-import logging
-import os
 import sys
 
 from fetchbridge import __title__, __version__
 from fetchbridge.daemon import run_daemon
 from fetchbridge.healthcheck import check_healthcheck
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+# Kein logging.basicConfig() mehr hier: setup_logging() (siehe daemon.py)
+# konfiguriert das Root-Logging inklusive optionalem Datei-Handler erst,
+# sobald tatsächlich der Dämon-Modus gestartet wird - --healthcheck/
+# --version brauchen kein Logging und sollen nicht schon vorher einen
+# stdout-Handler ohne Datei-Erkennung fest einrichten.
 
 
 def main():
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
     parser = argparse.ArgumentParser(
         prog="fetchbridge",
         description=f"{__title__} v{__version__}"

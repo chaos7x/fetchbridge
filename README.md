@@ -28,7 +28,7 @@ Der Container arbeitet intern mit zwei primären Datenpfaden:
 | :--- | :--- | :--- |
 | `/media/out` | **Quellverzeichnis** (Eingang für `fetchbridge`) | `.mkv`, `.mp4`, `.webm` |
 | `/media/in` | **Zielverzeichnis** (Ausgang für Folge-Tools) | `.mkv`, `.mp4`, `.webm` |
-| `/log` | Log-Dateien (Optional) | Logs / App-Output |
+| `/log` | Log-Dateien (Optional, siehe unten) | Logs / App-Output |
 
 ---
 
@@ -92,6 +92,13 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 # Log-Level: DEBUG, INFO, WARNING, ERROR
 # log_level = INFO
 
+# Fester Pfad für die rotierende Logdatei (max. 10 MB, 5 Backups). Ohne
+# diese Angabe wird automatisch geloggt, sobald /log tatsächlich als
+# Docker-Volume gemountet ist (reines Vorhandensein des Verzeichnisses
+# reicht nicht, siehe unten) oder ein klassischer Syslog-Daemon läuft -
+# sonst nur nach stdout (journald/docker logs erfassen das bereits).
+# log_file = /log/fetchbridge.log
+
 # Quellverzeichnis, das überwacht wird (Änderung erfordert Neustart)
 # source_dir = /media/out
 
@@ -126,6 +133,7 @@ fetchbridge [-h] [-D] [--healthcheck] [-v]
 * `SOURCE_DIR` / `TARGET_DIR` — Fallback, falls nicht in der Config gesetzt (Standard `/media/out` bzw. `/media/in`)
 * `ALLOWED_EXTENSIONS` / `TEMP_EXTENSIONS` — Fallback, falls nicht in der Config gesetzt
 * `LOG_LEVEL` — Standard `INFO`
+* `LOG_FILE` — Fallback, falls nicht in der Config gesetzt; siehe `[general]`-Sektion oben
 * `CONFIG_CHECK_INTERVAL` — Standard `15` (Sekunden zwischen Hash-Prüfungen der Config-Dateien)
 * `HEARTBEAT_FILE` — Standard `/tmp/fetchbridge.heartbeat`
 * `HEARTBEAT_MAX_AGE` — Standard `60` (Sekunden, bevor `--healthcheck` als "unhealthy" gilt)

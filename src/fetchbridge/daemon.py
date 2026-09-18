@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fetchbridge import config
 from fetchbridge.healthcheck import write_heartbeat
+from fetchbridge.logging_setup import setup_logging
 from fetchbridge.mover import process_file, scan_existing_files
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ def run_daemon():
     config.CLEANUP_EMPTY_DIRS = cfg["cleanup_empty_dirs"]
     config.STABILITY_CHECK_INTERVAL = cfg["stability_check_interval"]
     config.STABILITY_MAX_CHECKS = cfg["stability_max_checks"]
+    setup_logging(cfg)
     logging.getLogger().setLevel(cfg["log_level"])
 
     logger.info("Starte Inotify-Fetchbridge mit RO/RW-Erkennung...")
