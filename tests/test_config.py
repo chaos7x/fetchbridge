@@ -1,4 +1,7 @@
-"""Tests für load_config, get_config_hash, get_config_files_state (config.py)."""
+"""
+Tests für load_config, get_config_hash, get_config_files_state,
+_is_dedicated_mount und _running_in_container (config.py).
+"""
 
 from pathlib import Path
 
@@ -7,6 +10,78 @@ def _write_main_config(tmp_path, content):
     path = tmp_path / "fetchbridge.conf"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+class _FakeStat:
+    def __init__(self, st_dev):
+        self.st_dev = st_dev
+
+
+class TestIsDedicatedMount:
+    """
+    Unterscheidet ein echtes Docker-Volume/Bind-Mount von einem gewöhnlichen,
+    per `mkdir -p` fest ins Image gebackenen Verzeichnis (z.B. /media/out) -
+    ohne diese Unterscheidung würde ein solches Verzeichnis fälschlich als
+    "gemountet" durchgehen (siehe der in yt-upload/tw-recorder gefixte Bug).
+
+    stat() wird bewusst NICHT pauschal für alle Path-Instanzen ersetzt,
+    sondern mit Fallback auf die echte Methode für nicht getestete Pfade -
+    pytest ruft Path.stat() auch intern für eigene Zwecke auf.
+    """
+
+    def test_returns_false_if_path_does_not_exist(self, config, monkeypatch):
+        monkeypatch.setattr(Path, "is_dir", lambda self: False)
+        assert config._is_dedicated_mount(Path("/media/out")) is False
+
+    def test_returns_false_for_plain_baked_in_directory_same_device(self, config, monkeypatch):
+        """Gleiche st_dev wie das Elternverzeichnis = kein echter Mount, nur ein normaler Ordner."""
+        real_stat = Path.stat
+        monkeypatch.setattr(Path, "is_dir", lambda self: True)
+        monkeypatch.setattr(
+            Path, "stat",
+            lambda self: _FakeStat(st_dev=1) if str(self) in ("/media/out", "/media") else real_stat(self)
+        )
+
+        assert config._is_dedicated_mount(Path("/media/out")) is False
+
+    def test_returns_true_for_real_mount_different_device(self, config, monkeypatch):
+        """Unterschiedliche st_dev zum Elternverzeichnis = tatsächlich eingehängtes Volume/Bind-Mount."""
+        real_stat = Path.stat
+        monkeypatch.setattr(Path, "is_dir", lambda self: True)
+
+        def fake_stat(self):
+            if str(self) == "/media/out":
+                return _FakeStat(st_dev=2)
+            if str(self) == "/media":
+                return _FakeStat(st_dev=1)
+            return real_stat(self)
+
+        monkeypatch.setattr(Path, "stat", fake_stat)
+
+        assert config._is_dedicated_mount(Path("/media/out")) is True
+
+    def test_permission_error_on_stat_returns_false(self, config, monkeypatch):
+        real_stat = Path.stat
+        monkeypatch.setattr(Path, "is_dir", lambda self: True)
+
+        def raise_or_real_stat(self):
+            if str(self) in ("/media/out", "/media"):
+                raise OSError("Permission denied")
+            return real_stat(self)
+
+        monkeypatch.setattr(Path, "stat", raise_or_real_stat)
+
+        assert config._is_dedicated_mount(Path("/media/out")) is False
+
+
+class TestRunningInContainer:
+    def test_true_when_dockerenv_present(self, config, monkeypatch):
+        monkeypatch.setattr(config.Path, "exists", lambda self: str(self) == "/.dockerenv")
+        assert config._running_in_container() is True
+
+    def test_false_when_dockerenv_absent(self, config, monkeypatch):
+        monkeypatch.setattr(config.Path, "exists", lambda self: False)
+        assert config._running_in_container() is False
 
 
 class TestConfigHashing:

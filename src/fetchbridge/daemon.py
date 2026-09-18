@@ -12,6 +12,60 @@ from fetchbridge.mover import process_file, scan_existing_files
 logger = logging.getLogger(__name__)
 
 
+def _ensure_source_dir_ready():
+    """
+    Validiert source_dir vor dem Start des InotifyTree-Watchers: muss
+    existieren, und innerhalb eines Containers zusätzlich ein echtes
+    Docker-Volume sein statt nur das vom Dockerfile per `mkdir -p` fest
+    angelegte Verzeichnis (siehe config._is_dedicated_mount()) - sonst würde
+    der Dämon unbemerkt ein leeres, flüchtiges Verzeichnis überwachen, in das
+    ohne Mount nie etwas hineinkommt. Auf Bare-Metal ist ein normales, nicht
+    eigens gemountetes Verzeichnis dagegen der Normalfall und darf nicht
+    fehlschlagen (siehe config._running_in_container()).
+    Eigene Funktion statt Inline-Code in run_daemon(), damit dies isoliert
+    testbar ist, ohne die (nur im Dämon-Modus benötigte) inotify-Bibliothek
+    zu importieren.
+    """
+    if not config.SOURCE_DIR.is_dir():
+        logger.critical(
+            f"❌ source_dir existiert nicht oder ist kein Verzeichnis: '{config.SOURCE_DIR}'. "
+            "Prüfe Docker-Volume-Mount sowie SOURCE_DIR in Env/Config. Beende Prozess."
+        )
+        sys.exit(1)
+
+    if config._running_in_container() and not config._is_dedicated_mount(config.SOURCE_DIR):
+        logger.critical(
+            f"❌ source_dir '{config.SOURCE_DIR}' ist kein gemountetes Docker-Volume, sondern "
+            "nur das vom Image selbst angelegte Verzeichnis - vermutlich fehlt das Volume im "
+            "'docker run -v ...'/compose. Beende Prozess."
+        )
+        sys.exit(1)
+
+
+def _ensure_target_dir_ready():
+    """
+    Legt target_dir bei Bedarf an und validiert innerhalb eines Containers
+    zusätzlich, dass es sich um ein echtes Docker-Volume handelt statt nur
+    um das vom Dockerfile fest angelegte Verzeichnis - ohne echtes Volume
+    würden verschobene Dateien unbemerkt im flüchtigen Container-Layer
+    landen und beim nächsten Neustart verloren gehen (schwerwiegender als
+    bei source_dir, da bereits verarbeitete Dateien betroffen wären).
+    """
+    try:
+        config.TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.critical(f"❌ target_dir '{config.TARGET_DIR}' konnte nicht angelegt werden: {e}. Beende Prozess.")
+        sys.exit(1)
+
+    if config._running_in_container() and not config._is_dedicated_mount(config.TARGET_DIR):
+        logger.critical(
+            f"❌ target_dir '{config.TARGET_DIR}' ist kein gemountetes Docker-Volume, sondern "
+            "nur das vom Image selbst angelegte Verzeichnis - verschobene Dateien gingen beim "
+            "nächsten Container-Neustart verloren. Prüfe Docker-Volume-Mount. Beende Prozess."
+        )
+        sys.exit(1)
+
+
 def run_daemon():
     # Lazy statt Modul-Top-Level-Import: --healthcheck/--version sollen auch
     # funktionieren, wenn inotify aus irgendeinem Grund nicht importierbar
@@ -44,21 +98,8 @@ def run_daemon():
         f"config_files={used_config_files if used_config_files else 'keine (nur Defaults/Env)'}"
     )
 
-    # Fail-fast mit klarer Meldung statt eines kryptischen OSError aus
-    # InotifyTree, falls source_dir nicht existiert (z.B. falscher/fehlender
-    # Mount oder falscher Pfad in Config/Env-Var).
-    if not config.SOURCE_DIR.is_dir():
-        logger.critical(
-            f"❌ source_dir existiert nicht oder ist kein Verzeichnis: '{config.SOURCE_DIR}'. "
-            "Prüfe Docker-Volume-Mount sowie SOURCE_DIR in Env/Config. Beende Prozess."
-        )
-        sys.exit(1)
-
-    try:
-        config.TARGET_DIR.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        logger.critical(f"❌ target_dir '{config.TARGET_DIR}' konnte nicht angelegt werden: {e}. Beende Prozess.")
-        sys.exit(1)
+    _ensure_source_dir_ready()
+    _ensure_target_dir_ready()
 
     scan_existing_files()
     write_heartbeat()

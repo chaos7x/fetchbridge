@@ -28,3 +28,9 @@ def mover():
 def healthcheck():
     from fetchbridge import healthcheck
     return healthcheck
+
+
+@pytest.fixture(scope="session")
+def daemon():
+    from fetchbridge import daemon
+    return daemon
