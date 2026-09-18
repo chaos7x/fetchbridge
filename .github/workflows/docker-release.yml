@@ -157,6 +157,7 @@ jobs:
           fpm -s dir -t deb -f \
             -n fetchbridge \
             -v "$DEB_VERSION" \
+            -a all \
             --license GPL-3.0 \
             --maintainer "chaos7x" \
             --description "Inotify-basierte Bridge zwischen Verzeichnissen (RO/RW-Erkennung)" \
