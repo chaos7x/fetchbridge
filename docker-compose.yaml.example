@@ -26,9 +26,9 @@ services:
       # Optionales App-Volume (bei Bedarf einkommentieren)
       # - app:/app:ro
       # Eingangs-Ordner aus dem streamlink-recorder
-      - storage-source:/media/out:rw
+      - storage-source:/srv/media-pipeline/recordings:rw
       # Ausgangs-Ordner für den yt-upload
-      - storage-target:/media/in:rw
+      - storage-target:/srv/media-pipeline/incoming:rw
 
 # ==========================================
 # SEPARATE VOLUMES DEKLARATION
@@ -48,14 +48,14 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/tw-recorder/videos
+      device: /opt/docker/tw-recorder/recordings
 
   storage-target:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/yt-upload/videos/in
+      device: /opt/docker/yt-upload/incoming
 
   # --- Vorbereitung für spätere NFS-Mounts ---
   # storage-source:
@@ -63,11 +63,11 @@ volumes:
   #   driver_opts:
   #     type: nfs
   #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
-  #     device: ":/volume1/recordings/in"
+  #     device: ":/volume1/recordings"
   #
   # storage-target:
   #   driver: local
   #   driver_opts:
   #     type: nfs
   #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
-  #     device: ":/volume1/recordings/out"
+  #     device: ":/volume1/incoming"

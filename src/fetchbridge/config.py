@@ -14,8 +14,6 @@ APP_NAME = "fetchbridge"
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
-SOURCE_DIR = Path("/media/out")
-TARGET_DIR = Path("/media/in")
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
@@ -50,6 +48,27 @@ def _is_dedicated_mount(path: Path) -> bool:
         return path.stat().st_dev != path.parent.stat().st_dev
     except OSError:
         return False
+
+
+# Dynamic Path Detection: Docker-Volumes (/media/out, /media/in) vs.
+# Bare-Metal-Host. _is_dedicated_mount() statt blosser Existenzpruefung, da
+# das Dockerfile beide Verzeichnisse unconditional per `mkdir -p` anlegt -
+# ohne echte Volumes wuerde fetchbridge sonst faelschlich "Container-Modus"
+# annehmen und gegen den fluechtigen Container-Layer statt einen
+# Bare-Metal-Pfad arbeiten. Beide Verzeichnisse sind unabhaengige Mounts
+# (siehe docker-compose.yaml.example) und werden deshalb einzeln geprueft.
+#
+# Die Bare-Metal-Fallbacks zeigen bewusst auf die gemeinsamen
+# Uebergabeverzeichnisse der Pipeline statt auf rein private, Package-
+# relative Pfade: SOURCE_DIR ist derselbe Pfad wie tw-recorder.config.
+# STORAGE_DIR (dessen Schreiber), TARGET_DIR derselbe wie yt_upload.config.
+# IN_DIR (dessen Leser) - identisch zum Docker-Compose-Setup, wo die
+# jeweiligen Container-Paare denselben Host-Pfad mounten. Das .deb-Postinst
+# legt beide Verzeichnisse mit einer gemeinsamen Gruppe an, damit alle drei
+# Systemuser (tw-recorder, fetchbridge, yt-upload) tatsaechlich zugreifen
+# koennen.
+SOURCE_DIR = Path("/media/out") if _is_dedicated_mount(Path("/media/out")) else Path("/srv/media-pipeline/recordings")
+TARGET_DIR = Path("/media/in") if _is_dedicated_mount(Path("/media/in")) else Path("/srv/media-pipeline/incoming")
 
 
 def _running_in_container() -> bool:
@@ -126,8 +145,8 @@ def load_config():
         except (OSError, configparser.Error, UnicodeDecodeError) as e:
             logger.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
 
-    source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", "/media/out")))
-    target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", "/media/in")))
+    source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", str(SOURCE_DIR))))
+    target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", str(TARGET_DIR))))
 
     allowed_raw = _get(
         config, "mover", "allowed_extensions",

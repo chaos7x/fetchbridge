@@ -23,10 +23,10 @@
 
 # Quellverzeichnis, das überwacht wird (Änderung erfordert Neustart des
 # Fetchbridge-Prozesses, da InotifyTree fest an den Startpfad gebunden ist)
-# source_dir = /media/out
+# source_dir = /srv/media-pipeline/recordings
 
 # Zielverzeichnis, in das fertige Dateien verschoben/kopiert werden
-# target_dir = /media/in
+# target_dir = /srv/media-pipeline/incoming
 
 
 [mover]
