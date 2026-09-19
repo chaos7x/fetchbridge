@@ -4,6 +4,8 @@
 
 Er dient als intelligentes Bindeglied in Automated-Media-Pipelines – beispielsweise zwischen einem Stream-Recorder (`tw-recorder`) und einem Upload-Service (`yt-upload`).
 
+Eine Übersicht der internen Architektur (Module, Datenfluss, Diagramm) findet sich in [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ---
 
 ## 🚀 Features
