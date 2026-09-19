@@ -14,8 +14,12 @@ APP_NAME = "fetchbridge"
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
-SOURCE_DIR = Path("/media/out")
-TARGET_DIR = Path("/media/in")
+# BASE_DIR zeigt auf das Package-Verzeichnis (fetchbridge/); analog zu
+# yt_upload.config.BASE_DIR/tw_recorder.config.BASE_DIR nur der Bare-Metal-
+# Fallback-Anker, falls /media/out bzw. /media/in keine echten Docker-Volumes
+# sind.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
@@ -50,6 +54,17 @@ def _is_dedicated_mount(path: Path) -> bool:
         return path.stat().st_dev != path.parent.stat().st_dev
     except OSError:
         return False
+
+
+# Dynamic Path Detection: Docker-Volumes (/media/out, /media/in) vs.
+# Bare-Metal-Host. _is_dedicated_mount() statt blosser Existenzpruefung, da
+# das Dockerfile beide Verzeichnisse unconditional per `mkdir -p` anlegt -
+# ohne echte Volumes wuerde fetchbridge sonst faelschlich "Container-Modus"
+# annehmen und gegen den fluechtigen Container-Layer statt einen
+# Bare-Metal-Pfad arbeiten. Beide Verzeichnisse sind unabhaengige Mounts
+# (siehe docker-compose.yaml.example) und werden deshalb einzeln geprueft.
+SOURCE_DIR = Path("/media/out") if _is_dedicated_mount(Path("/media/out")) else Path(BASE_DIR) / "fetchbridge-data" / "out"
+TARGET_DIR = Path("/media/in") if _is_dedicated_mount(Path("/media/in")) else Path(BASE_DIR) / "fetchbridge-data" / "in"
 
 
 def _running_in_container() -> bool:
@@ -126,8 +141,8 @@ def load_config():
         except (OSError, configparser.Error, UnicodeDecodeError) as e:
             logger.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
 
-    source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", "/media/out")))
-    target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", "/media/in")))
+    source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", str(SOURCE_DIR))))
+    target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", str(TARGET_DIR))))
 
     allowed_raw = _get(
         config, "mover", "allowed_extensions",

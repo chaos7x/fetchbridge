@@ -201,6 +201,13 @@ class TestLoadConfig:
     def test_falls_back_to_defaults_without_config_file(self, config, tmp_path, monkeypatch):
         monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "missing.conf")
         monkeypatch.setattr(config, "CONF_D_DIR", tmp_path / "missing-dir")
+        # SOURCE_DIR/TARGET_DIR selbst simulieren den Container-Fall (echte
+        # Volumes unter /media/out bzw. /media/in gemountet) - load_config()'s
+        # Fallback-Kette soll dann genau diese Werte liefern, unabhängig
+        # davon, ob /media/out bzw. /media/in im Testsystem tatsächlich Mounts
+        # sind (siehe TestIsDedicatedMount für die Mount-Erkennung selbst).
+        monkeypatch.setattr(config, "SOURCE_DIR", Path("/media/out"))
+        monkeypatch.setattr(config, "TARGET_DIR", Path("/media/in"))
         monkeypatch.delenv("SOURCE_DIR", raising=False)
         monkeypatch.delenv("TARGET_DIR", raising=False)
 
@@ -223,6 +230,8 @@ class TestLoadConfig:
         main_conf = _write_main_config(tmp_path, "[general]\nlog_level\nsource_dir\n")
         monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
         monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        # Simuliert den Container-Fall, siehe test_falls_back_to_defaults_without_config_file.
+        monkeypatch.setattr(config, "SOURCE_DIR", Path("/media/out"))
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("SOURCE_DIR", raising=False)
 
