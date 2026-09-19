@@ -55,11 +55,12 @@ services:
     volumes:
       # Quell-Ordner (Eingang aus tw-recorder)
       - /opt/docker/tw-recorder/recordings:/srv/media-pipeline/recordings:rw
-      # Ziel-Ordner (Eingang für yt-upload) - zeigt bewusst auf die "in"-
-      # Unterordner von yt-uploads eigenem yt-upload-data-Mount statt auf ein
-      # eigenes Top-Level-Verzeichnis, spart yt-upload dadurch einen zweiten
+      # Ziel-Ordner (Eingang für yt-upload) - zeigt bewusst auf die "incoming"-
+      # Unterordner von yt-uploads eigenem yt-upload-data-Mount (der dort
+      # direkt auf /srv/media-pipeline gemountet ist) statt auf ein eigenes
+      # Top-Level-Verzeichnis, spart yt-upload dadurch einen zweiten
       # Bind-Mount (siehe yt-upload/docker-compose.yaml.example)
-      - /opt/docker/yt-upload/yt-upload-data/in:/srv/media-pipeline/incoming:rw
+      - /opt/docker/yt-upload/yt-upload-data/incoming:/srv/media-pipeline/incoming:rw
 ```
 
 ---
