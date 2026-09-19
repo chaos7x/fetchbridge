@@ -50,25 +50,21 @@ def _is_dedicated_mount(path: Path) -> bool:
         return False
 
 
-# Dynamic Path Detection: Docker-Volumes (/media/out, /media/in) vs.
-# Bare-Metal-Host. _is_dedicated_mount() statt blosser Existenzpruefung, da
-# das Dockerfile beide Verzeichnisse unconditional per `mkdir -p` anlegt -
-# ohne echte Volumes wuerde fetchbridge sonst faelschlich "Container-Modus"
-# annehmen und gegen den fluechtigen Container-Layer statt einen
-# Bare-Metal-Pfad arbeiten. Beide Verzeichnisse sind unabhaengige Mounts
-# (siehe docker-compose.yaml.example) und werden deshalb einzeln geprueft.
-#
-# Die Bare-Metal-Fallbacks zeigen bewusst auf die gemeinsamen
-# Uebergabeverzeichnisse der Pipeline statt auf rein private, Package-
-# relative Pfade: SOURCE_DIR ist derselbe Pfad wie tw-recorder.config.
+# SOURCE_DIR/TARGET_DIR zeigen einheitlich (Docker wie Bare-Metal) auf die
+# gemeinsamen Uebergabeverzeichnisse der Pipeline statt auf rein private,
+# Package-relative Pfade oder die inzwischen abgeloesten /media/out,
+# /media/in-Mountpunkte: SOURCE_DIR ist derselbe Pfad wie tw-recorder.config.
 # STORAGE_DIR (dessen Schreiber), TARGET_DIR derselbe wie yt_upload.config.
 # IN_DIR (dessen Leser) - identisch zum Docker-Compose-Setup, wo die
 # jeweiligen Container-Paare denselben Host-Pfad mounten. Das .deb-Postinst
 # legt beide Verzeichnisse mit einer gemeinsamen Gruppe an, damit alle drei
 # Systemuser (tw-recorder, fetchbridge, yt-upload) tatsaechlich zugreifen
-# koennen.
-SOURCE_DIR = Path("/media/out") if _is_dedicated_mount(Path("/media/out")) else Path("/srv/media-pipeline/recordings")
-TARGET_DIR = Path("/media/in") if _is_dedicated_mount(Path("/media/in")) else Path("/srv/media-pipeline/incoming")
+# koennen. _ensure_source_dir_ready()/_ensure_target_dir_ready() in daemon.py
+# pruefen weiterhin per _is_dedicated_mount(), ob hier innerhalb eines
+# Containers tatsaechlich ein echtes Volume gemountet ist, unabhaengig vom
+# konkreten Pfad.
+SOURCE_DIR = Path("/srv/media-pipeline/recordings")
+TARGET_DIR = Path("/srv/media-pipeline/incoming")
 
 
 def _running_in_container() -> bool:
