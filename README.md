@@ -28,9 +28,11 @@ Der Container arbeitet intern mit zwei primären Datenpfaden:
 
 | Pfad im Container | Funktion | Standard-Format |
 | :--- | :--- | :--- |
-| `/media/out` | **Quellverzeichnis** (Eingang für `fetchbridge`) | `.mkv`, `.mp4`, `.webm` |
-| `/media/in` | **Zielverzeichnis** (Ausgang für Folge-Tools) | `.mkv`, `.mp4`, `.webm` |
+| `/srv/media-pipeline/recordings` | **Quellverzeichnis** (Eingang für `fetchbridge`, geteilt mit `tw-recorder`s `STORAGE_DIR`) | `.mkv`, `.mp4`, `.webm` |
+| `/srv/media-pipeline/incoming` | **Zielverzeichnis** (Ausgang für Folge-Tools, geteilt mit `yt-upload`s `IN_DIR`) | `.mkv`, `.mp4`, `.webm` |
 | `/log` | Log-Dateien (Optional, siehe unten) | Logs / App-Output |
+
+Für bestehende Setups werden die alten Mountpunkte `/media/out`/`/media/in` weiterhin erkannt (siehe `SOURCE_DIR`/`TARGET_DIR` unten) - neue Deployments sollten aber die Pfade oben verwenden.
 
 ---
 
@@ -52,9 +54,9 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       # Quell-Ordner (Eingang aus tw-recorder)
-      - /opt/docker/tw-recorder/videos:/media/out:rw
+      - /opt/docker/tw-recorder/recordings:/srv/media-pipeline/recordings:rw
       # Ziel-Ordner (Eingang für yt-upload)
-      - /opt/docker/yt-upload/videos/in:/media/in:rw
+      - /opt/docker/yt-upload/incoming:/srv/media-pipeline/incoming:rw
 ```
 
 ---
@@ -126,10 +128,10 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 # log_file = /log/fetchbridge.log
 
 # Quellverzeichnis, das überwacht wird (Änderung erfordert Neustart)
-# source_dir = /media/out
+# source_dir = /srv/media-pipeline/recordings
 
 # Zielverzeichnis, in das fertige Dateien verschoben/kopiert werden
-# target_dir = /media/in
+# target_dir = /srv/media-pipeline/incoming
 
 
 [mover]
