@@ -14,12 +14,6 @@ APP_NAME = "fetchbridge"
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
-# BASE_DIR zeigt auf das Package-Verzeichnis (fetchbridge/); analog zu
-# yt_upload.config.BASE_DIR/tw_recorder.config.BASE_DIR nur der Bare-Metal-
-# Fallback-Anker, falls /media/out bzw. /media/in keine echten Docker-Volumes
-# sind.
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
@@ -63,8 +57,18 @@ def _is_dedicated_mount(path: Path) -> bool:
 # annehmen und gegen den fluechtigen Container-Layer statt einen
 # Bare-Metal-Pfad arbeiten. Beide Verzeichnisse sind unabhaengige Mounts
 # (siehe docker-compose.yaml.example) und werden deshalb einzeln geprueft.
-SOURCE_DIR = Path("/media/out") if _is_dedicated_mount(Path("/media/out")) else Path(BASE_DIR) / "fetchbridge-data" / "out"
-TARGET_DIR = Path("/media/in") if _is_dedicated_mount(Path("/media/in")) else Path(BASE_DIR) / "fetchbridge-data" / "in"
+#
+# Die Bare-Metal-Fallbacks zeigen bewusst auf die gemeinsamen
+# Uebergabeverzeichnisse der Pipeline statt auf rein private, Package-
+# relative Pfade: SOURCE_DIR ist derselbe Pfad wie tw-recorder.config.
+# STORAGE_DIR (dessen Schreiber), TARGET_DIR derselbe wie yt_upload.config.
+# IN_DIR (dessen Leser) - identisch zum Docker-Compose-Setup, wo die
+# jeweiligen Container-Paare denselben Host-Pfad mounten. Das .deb-Postinst
+# legt beide Verzeichnisse mit einer gemeinsamen Gruppe an, damit alle drei
+# Systemuser (tw-recorder, fetchbridge, yt-upload) tatsaechlich zugreifen
+# koennen.
+SOURCE_DIR = Path("/media/out") if _is_dedicated_mount(Path("/media/out")) else Path("/srv/media-pipeline/recordings")
+TARGET_DIR = Path("/media/in") if _is_dedicated_mount(Path("/media/in")) else Path("/srv/media-pipeline/incoming")
 
 
 def _running_in_container() -> bool:

@@ -156,7 +156,7 @@ fetchbridge [-h] [-D] [--healthcheck] [-v]
 
 * `CONFIG_FILE` — Standard `/etc/fetchbridge/fetchbridge.conf`
 * `CONF_D_DIR` — Standard `/etc/fetchbridge/conf.d`
-* `SOURCE_DIR` / `TARGET_DIR` — Fallback, falls nicht in der Config gesetzt (Standard `/media/out` bzw. `/media/in`)
+* `SOURCE_DIR` / `TARGET_DIR` — Fallback, falls nicht in der Config gesetzt. Standard `/media/out` bzw. `/media/in` im Container (falls dort echte Volumes gemountet sind), sonst auf Bare-Metal `/srv/media-pipeline/recordings` (dasselbe Verzeichnis wie `tw-recorder`s `STORAGE_DIR`) bzw. `/srv/media-pipeline/incoming` (dasselbe Verzeichnis wie `yt-upload`s `IN_DIR`). Das `.deb`-Postinst legt beide mit einer gemeinsamen Gruppe (`media-pipeline`) an, damit alle drei Dienste darauf zugreifen können.
 * `ALLOWED_EXTENSIONS` / `TEMP_EXTENSIONS` — Fallback, falls nicht in der Config gesetzt
 * `LOG_LEVEL` — Standard `INFO`
 * `LOG_FILE` — Fallback, falls nicht in der Config gesetzt; siehe `[general]`-Sektion oben
