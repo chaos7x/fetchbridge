@@ -28,8 +28,8 @@ subgraph group_processing["File Processing"]
 end
 
 subgraph group_observability["Health and Storage"]
-  node_source_dir[("Source /media/out")]
-  node_target_dir[("Target /media/in")]
+  node_source_dir[("Source /srv/media-pipeline/recordings")]
+  node_target_dir[("Target /srv/media-pipeline/incoming")]
   node_heartbeat["Heartbeat Writer<br/>[healthcheck.py]"]
   node_healthcheck["Healthcheck Command<br/>[healthcheck.py]"]
   node_heartbeat_file[("Heartbeat File")]
@@ -120,10 +120,10 @@ class node_upstream_recorder,node_downstream_tools,node_docker_monitor,node_inot
 ### Health and Storage
 
 - **`healthcheck.py`** — `write_heartbeat()` wird bei jedem verarbeiteten Event und bei jedem Idle-Zyklus des Daemons aufgerufen; `check_healthcheck()` (CLI: `--healthcheck`) prüft als eigener kurzlebiger Prozess nur Existenz und Alter der Heartbeat-Datei, unabhängig vom laufenden Daemon — erkennt damit sowohl tote als auch hängende (deadlocked) Prozesse.
-- **Source `/media/out`** — Quellverzeichnis, typischerweise von einem vorgelagerten Tool (z. B. `tw-recorder`) befüllt.
-- **Target `/media/in`** — Zielverzeichnis, aus dem nachgelagerte Tools (z. B. `yt-upload`) Dateien übernehmen.
+- **Source `/srv/media-pipeline/recordings`** — Quellverzeichnis, typischerweise von einem vorgelagerten Tool (z. B. `tw-recorder`) befüllt.
+- **Target `/srv/media-pipeline/incoming`** — Zielverzeichnis, aus dem nachgelagerte Tools (z. B. `yt-upload`) Dateien übernehmen.
 - **Heartbeat-Datei** — von `healthcheck.py` geschrieben/gelesen, Grundlage für `--healthcheck` und Docker/Kubernetes-Liveness-Probes.
 
 ## Einordnung in die Medien-Pipeline
 
-`fetchbridge` ist das Bindeglied zwischen `tw-recorder` (schreibt fertige Aufnahmen nach `/media/out`) und `yt-upload` (verarbeitet neue Dateien aus `/media/in`) — die RW/RO-Erkennung erlaubt dabei, `/media/out` je nach Setup entweder als gemeinsames beschreibbares Volume oder als read-only-Mount einzubinden, ohne dass sich am Verhalten von `fetchbridge` etwas ändert.
+`fetchbridge` ist das Bindeglied zwischen `tw-recorder` (schreibt fertige Aufnahmen nach `/srv/media-pipeline/recordings`) und `yt-upload` (verarbeitet neue Dateien aus `/srv/media-pipeline/incoming`) — die RW/RO-Erkennung erlaubt dabei, `/srv/media-pipeline/recordings` je nach Setup entweder als gemeinsames beschreibbares Volume oder als read-only-Mount einzubinden, ohne dass sich am Verhalten von `fetchbridge` etwas ändert.
