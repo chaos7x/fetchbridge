@@ -50,16 +50,17 @@ volumes:
       o: bind
       device: /opt/docker/tw-recorder/recordings
 
-  # Zeigt bewusst auf die "in"-Unterordner von yt-uploads eigenem
-  # yt-upload-data-Bind-Mount (siehe dessen docker-compose.yaml.example)
-  # statt auf ein eigenes Top-Level-Verzeichnis - spart yt-upload dadurch
-  # einen zweiten Bind-Mount, ohne dass fetchbridge etwas anders mounten muss.
+  # Zeigt bewusst auf die "incoming"-Unterordner von yt-uploads eigenem
+  # yt-upload-data-Bind-Mount (der dort direkt auf /srv/media-pipeline
+  # gemountet ist, siehe dessen docker-compose.yaml.example) statt auf ein
+  # eigenes Top-Level-Verzeichnis - spart yt-upload dadurch einen zweiten
+  # Bind-Mount, ohne dass fetchbridge etwas anders mounten muss.
   storage-target:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/yt-upload/yt-upload-data/in
+      device: /opt/docker/yt-upload/yt-upload-data/incoming
 
   # --- Vorbereitung für spätere NFS-Mounts ---
   # storage-source:
@@ -74,4 +75,4 @@ volumes:
   #   driver_opts:
   #     type: nfs
   #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
-  #     device: ":/volume1/yt-upload-data/in"
+  #     device: ":/volume1/yt-upload-data/incoming"
