@@ -59,7 +59,7 @@ ENV HOME=/app
 # daher müssen alle drei Verzeichnisse für jede UID beschreibbar bleiben. Das
 # Sticky-Bit (wie bei /tmp) verhindert aber, dass ein Prozess/Nutzer Dateien
 # löschen oder umbenennen kann, die ein anderer angelegt hat.
-RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d && chmod 1777 /media/in /media/out /log
+RUN mkdir -p /media/in /media/out /log /etc/fetchbridge/conf.d /srv/media-pipeline/recordings /srv/media-pipeline/incoming && chmod 1777 /media/in /media/out /log /srv/media-pipeline/recordings /srv/media-pipeline/incoming
 
 # ==========================================
 # LAYER 3: fetchbridge-Package aus dem Builder übernehmen
