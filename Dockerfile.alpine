@@ -48,6 +48,22 @@ RUN apk upgrade --no-cache && apk add --no-cache \
     mc \
     ca-certificates
 
+# ==========================================
+# LAYER 0b: Dedizierter Non-Root-User
+# ==========================================
+# Gehärtetes Image: laeuft standardmaessig nicht als root, auch wenn beim
+# Deploy kein `user:`/`-u` gesetzt wird. UID/GID bewusst NICHT fest kodiert -
+# addgroup/adduser -S waehlen automatisch eine freie System-UID/GID <1000.
+# BusyBox' adduser legt OHNE -G keine gleichnamige Gruppe automatisch an
+# (anders als GNU adduser/useradd -U) - deshalb hier explizit zwei Schritte,
+# sonst schlaegt ein spaeteres `chown fetchbridge:fetchbridge` fehl, weil die
+# Gruppe "fetchbridge" gar nicht existiert. Wer die UID an sein eigenes Setup
+# anpassen will (z.B. fuer Bind-Mount-Rechte), ueberschreibt sie ganz normal
+# per `docker run -u`/Compose `user:` - die 1777-Verzeichnisse unten bleiben
+# davon unabhaengig fuer jede UID beschreibbar.
+RUN addgroup -S fetchbridge \
+    && adduser -S -D -H -h /nonexistent -s /sbin/nologin -G fetchbridge fetchbridge
+
 WORKDIR /app
 ENV HOME=/app
 ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
@@ -78,6 +94,11 @@ COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 
 RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
+
+# /app gehoert dem dedizierten User statt root, damit HOME=/app (siehe oben)
+# fuer ihn tatsaechlich beschreibbar ist.
+RUN chown fetchbridge:fetchbridge /app
+USER fetchbridge
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD ["fetchbridge", "--healthcheck"]

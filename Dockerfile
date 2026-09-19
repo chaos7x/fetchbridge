@@ -48,6 +48,21 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     mc \
     && rm -rf /var/lib/apt/lists/*
 
+# ==========================================
+# LAYER 1b: Dedizierter Non-Root-User
+# ==========================================
+# Gehärtetes Image: laeuft standardmaessig nicht als root, auch wenn beim
+# Deploy kein `user:`/`-u` gesetzt wird. UID/GID bewusst NICHT fest kodiert -
+# useradd/groupadd (statt adduser, das im -slim-Base-Image fehlt und den
+# Build mit "exit code: 127" scheitern liess) waehlen automatisch eine freie
+# System-UID <1000. Wer die UID an sein eigenes Setup anpassen will (z.B.
+# fuer Bind-Mount-Rechte), ueberschreibt sie ganz normal per `docker run -u`/
+# Compose `user:` - die 1777-Verzeichnisse unten bleiben davon unabhaengig
+# fuer jede UID beschreibbar.
+RUN groupadd --system fetchbridge \
+    && useradd --system --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin --gid fetchbridge fetchbridge
+
 WORKDIR /app
 ENV HOME=/app
 
@@ -82,6 +97,11 @@ COPY --chmod=644 fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 
 RUN ln -s /etc/global.bashrc /tmp/.bashrc \
     && ln -s /etc/global.bashrc /app/.bashrc
+
+# /app gehoert dem dedizierten User statt root, damit HOME=/app (siehe oben)
+# fuer ihn tatsaechlich beschreibbar ist.
+RUN chown fetchbridge:fetchbridge /app
+USER fetchbridge
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD ["fetchbridge", "--healthcheck"]
