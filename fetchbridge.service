@@ -12,5 +12,33 @@ ExecStart=/usr/bin/fetchbridge -D
 Restart=on-failure
 RestartSec=5
 
+# --- Hardening ---
+# ReadWritePaths deckt genau das ab, was der Daemon tatsaechlich beschreibt:
+# /srv/media-pipeline (SOURCE_DIR fuer cleanup_empty_dirs()' rmdir, TARGET_DIR
+# fuer die eigentlichen Verschiebungen/Kopien) und /var/log/fetchbridge
+# (Standard-Logpfad, siehe logging_setup._resolve_log_file_path()). Wer
+# abweichende Pfade konfiguriert (LOG_FILE/SOURCE_DIR/TARGET_DIR/...), muss
+# sie hier ergaenzen, sonst schlaegt der jeweilige Schreibzugriff fehl.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/media-pipeline /var/log/fetchbridge
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+# fetchbridge macht ueberhaupt keine Netzwerk-Aufrufe (reine lokale
+# Dateiverschiebung, ctypes-basiertes inotify ohne Socket) - daher werden
+# saemtliche Adressfamilien blockiert statt nur auf TCP/IP eingeschraenkt.
+RestrictAddressFamilies=none
+
 [Install]
 WantedBy=multi-user.target
