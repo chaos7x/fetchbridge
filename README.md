@@ -84,10 +84,16 @@ wget https://github.com/chaos7x/fetchbridge/releases/latest/download/fetchbridge
 apt install ./fetchbridge_<version>_all.deb
 ```
 
-Das Paket legt einen dedizierten Systemuser (`fetchbridge`) und einen systemd-Service an, startet ihn aber bewusst nicht automatisch - erst `/etc/fetchbridge/fetchbridge.conf` (bzw. `conf.d/`) anpassen, dann:
+Das Paket legt einen dedizierten Systemuser (`fetchbridge`) an und startet den Dienst bewusst nicht automatisch - erst `/etc/fetchbridge/fetchbridge.conf` (bzw. `conf.d/`) anpassen, dann:
 
 ```bash
 systemctl enable --now fetchbridge
+```
+
+**Devuan / Debian ohne systemd (`sysvinit-core`):** Das Paket bringt zusätzlich ein klassisches `/etc/init.d/fetchbridge`-Skript mit, das `postinst` automatisch anstelle des systemd-Service registriert, wenn kein systemd läuft:
+
+```bash
+service fetchbridge start
 ```
 
 ### Alternative: Standalone .pyz (kein pip/apt nötig)

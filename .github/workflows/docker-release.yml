@@ -160,13 +160,17 @@ jobs:
           # Verzeichnisses (wie im Dockerfile) - das ist bei einem .deb der
           # Standard-Suchpfad von Debians System-Python, das Package ist
           # damit ohne zusätzliche Umgebungsvariablen importierbar.
-          mkdir -p pkgroot/usr/bin pkgroot/usr/lib/python3/dist-packages pkgroot/etc/fetchbridge/conf.d pkgroot/usr/lib/systemd/system
+          mkdir -p pkgroot/usr/bin pkgroot/usr/lib/python3/dist-packages pkgroot/etc/fetchbridge/conf.d pkgroot/usr/lib/systemd/system pkgroot/etc/init.d
           cp install/bin/fetchbridge pkgroot/usr/bin/fetchbridge
           chmod 755 pkgroot/usr/bin/fetchbridge
           cp -r install/fetchbridge pkgroot/usr/lib/python3/dist-packages/fetchbridge
           cp -r install/fetchbridge-*.dist-info pkgroot/usr/lib/python3/dist-packages/
           cp fetchbridge.conf.example pkgroot/etc/fetchbridge/fetchbridge.conf
           cp fetchbridge.service pkgroot/usr/lib/systemd/system/fetchbridge.service
+          # /etc/init.d-Fallback fuer Nicht-systemd-Hosts (Devuan, Debian mit
+          # sysvinit-core) - siehe postinst.sh fuer die Registrierung.
+          cp init.d/fetchbridge pkgroot/etc/init.d/fetchbridge
+          chmod 755 pkgroot/etc/init.d/fetchbridge
 
       - name: .deb bauen
         run: |
