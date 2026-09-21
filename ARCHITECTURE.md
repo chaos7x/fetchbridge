@@ -7,85 +7,76 @@ Dieses Dokument beschreibt den Aufbau von `fetchbridge` auf Modulebene: welche K
 ```mermaid
 flowchart TD
 
-subgraph group_interface["User Interface"]
+subgraph group_runtime["Runtime Control"]
   node_cli["CLI Entry<br/>[main.py]"]
-end
-
-subgraph group_runtime["Daemon Runtime"]
-  node_daemon["Daemon Orchestrator<br/>[daemon.py]"]
+  node_daemon["Daemon Controller<br/>[daemon.py]"]
   node_watcher["Inotify Watcher<br/>[daemon.py]"]
-  node_initial_scan["Initial Scanner<br/>[mover.py]"]
-end
-
-subgraph group_configobs["Config &amp; Observability"]
-  node_config["Config Manager<br/>[config.py]"]
-  node_logging["Logging Setup<br/>[logging_setup.py]"]
-  node_heartbeat["Heartbeat File<br/>[healthcheck.py]"]
-  node_health["Health Checker<br/>[healthcheck.py]"]
 end
 
 subgraph group_processing["File Processing"]
-  node_processor["File Processor<br/>[mover.py]"]
+  node_scanner["Initial Scanner<br/>[mover.py]"]
+  node_processor["File Filter<br/>[mover.py]"]
   node_stability["Stability Check<br/>[mover.py]"]
-  node_collision["Collision Naming<br/>[mover.py]"]
-  node_rw_transfer["RW Transfer<br/>[mover.py]"]
-  node_ro_transfer["RO Copy<br/>[mover.py]"]
+  node_transfer["RW/RO Transfer<br/>[mover.py]"]
+  node_cleanup["Directory Cleanup<br/>[mover.py]"]
 end
 
-subgraph group_pipeline["Media Pipeline"]
-  node_source_dir["Source Directory<br/>[config.py]"]
-  node_target_dir["Target Directory<br/>[config.py]"]
+subgraph group_configuration["Configuration"]
+  node_config["Config Manager<br/>[config.py]"]
+  node_config_files["Config Files"]
+end
+
+subgraph group_operations["Operations"]
+  node_logging["Logging Setup<br/>[logging_setup.py]"]
+  node_heartbeat["Heartbeat Writer<br/>[healthcheck.py]"]
+  node_healthcheck["Healthcheck Command<br/>[healthcheck.py]"]
 end
 
 node_operator(("Operator"))
-node_docker_health(("Docker Healthcheck"))
-node_recorder(("tw-recorder"))
-node_upload(("yt-upload"))
-node_inotify{{"inotify"}}
+node_recorder(("Stream Recorder"))
+node_uploader(("Upload Service"))
+node_source["Recordings Directory"]
+node_target["Incoming Directory"]
+node_log_sinks["Log Sinks"]
+node_syslog(("Syslog Daemon"))
 
-node_operator -->|"starts daemon"| node_cli
-node_docker_health -.->|"runs check"| node_cli
-node_cli -->|"selects daemon"| node_daemon
-node_cli -->|"selects healthcheck"| node_health
+node_operator -->|"invokes"| node_cli
+node_recorder -->|"writes videos"| node_source
+node_uploader -->|"reads videos"| node_target
+node_cli -->|"starts daemon"| node_daemon
+node_cli -->|"runs check"| node_healthcheck
 node_daemon -->|"loads config"| node_config
-node_daemon -->|"checks hash"| node_config
-node_daemon -->|"sets logging"| node_logging
-node_daemon -->|"scans existing"| node_initial_scan
+node_config_files -->|"provides settings"| node_config
+node_daemon -->|"configures logs"| node_logging
 node_daemon -->|"starts watcher"| node_watcher
-node_watcher -->|"uses inotify"| node_inotify
-node_inotify -->|"emits events"| node_watcher
-node_source_dir -->|"raises events"| node_inotify
-node_watcher -->|"processes event"| node_processor
-node_source_dir -->|"enumerates files"| node_initial_scan
-node_initial_scan -->|"processes files"| node_processor
+node_source -->|"emits events"| node_watcher
+node_watcher -->|"dispatches events"| node_daemon
+node_daemon -->|"scans startup"| node_scanner
+node_daemon -->|"processes events"| node_processor
+node_scanner -->|"processes files"| node_processor
 node_processor -->|"checks stability"| node_stability
-node_processor -->|"chooses name"| node_collision
-node_processor -->|"moves when writable"| node_rw_transfer
-node_processor -->|"copies when read-only"| node_ro_transfer
-node_rw_transfer -->|"removes source"| node_source_dir
-node_rw_transfer -->|"writes target"| node_target_dir
-node_ro_transfer -->|"reads source"| node_source_dir
-node_ro_transfer -->|"writes target"| node_target_dir
-node_recorder -->|"writes videos"| node_source_dir
-node_target_dir -->|"provides videos"| node_upload
+node_processor -->|"transfers file"| node_transfer
+node_transfer -->|"reads or removes"| node_source
+node_transfer -->|"writes output"| node_target
+node_processor -->|"cleans folders"| node_cleanup
 node_daemon -->|"writes heartbeat"| node_heartbeat
-node_health -->|"reads heartbeat"| node_heartbeat
+node_healthcheck -->|"reads heartbeat"| node_heartbeat
+node_logging -->|"writes logs"| node_log_sinks
+node_logging -.->|"uses syslog"| node_syslog
+node_daemon -->|"reloads config"| node_config
 
 click node_cli "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/main.py"
 click node_daemon "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/daemon.py"
 click node_watcher "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/daemon.py"
-click node_initial_scan "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
 click node_config "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/config.py"
-click node_logging "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/logging_setup.py"
-click node_heartbeat "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/healthcheck.py"
-click node_health "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/healthcheck.py"
+click node_scanner "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
 click node_processor "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
 click node_stability "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
-click node_collision "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
-click node_rw_transfer "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
-click node_ro_transfer "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
-click node_source_dir "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/config.py"
-click node_target_dir "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/config.py"
+click node_transfer "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
+click node_cleanup "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/mover.py"
+click node_logging "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/logging_setup.py"
+click node_heartbeat "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/healthcheck.py"
+click node_healthcheck "https://github.com/chaos7x/fetchbridge/blob/main/src/fetchbridge/healthcheck.py"
 
 classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
 classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
@@ -94,11 +85,11 @@ classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
 classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
 classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
 classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-class node_cli toneBlue
-class node_daemon,node_watcher,node_initial_scan toneAmber
-class node_config,node_logging,node_heartbeat,node_health toneMint
-class node_processor,node_stability,node_collision,node_rw_transfer,node_ro_transfer toneRose
-class node_source_dir,node_target_dir,node_operator,node_docker_health,node_recorder,node_upload,node_inotify toneIndigo
+class node_cli,node_daemon,node_watcher toneBlue
+class node_scanner,node_processor,node_stability,node_transfer,node_cleanup toneAmber
+class node_config,node_config_files toneMint
+class node_logging,node_heartbeat,node_healthcheck toneRose
+class node_operator,node_recorder,node_uploader,node_source,node_target,node_log_sinks,node_syslog toneIndigo
 ```
 
 ## Komponenten
