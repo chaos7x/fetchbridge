@@ -1,6 +1,7 @@
 """Dämon-Modus: Inotify-Überwachung des Quellverzeichnisses, Config-Hot-Reload."""
 
 import logging
+import signal
 import sys
 import time
 from pathlib import Path
@@ -11,6 +12,35 @@ from fetchbridge.logging_setup import setup_logging
 from fetchbridge.mover import process_file, scan_existing_files
 
 logger = logging.getLogger(__name__)
+
+_shutdown_requested = False
+
+
+def _handle_shutdown_signal(signum, _frame):
+    global _shutdown_requested
+    logger.info(f"Signal {signal.Signals(signum).name} empfangen, beende nach der aktuellen Datei...")
+    _shutdown_requested = True
+
+
+def install_signal_handlers():
+    """
+    Registriert SIGTERM/SIGINT für einen sauberen Shutdown. `systemctl stop`
+    (und `docker stop`) senden SIGTERM, das Python OHNE eigenen Handler nicht
+    in ein KeyboardInterrupt übersetzt - der Prozess würde sofort und ohne
+    jede Log-Zeile beendet, im ungünstigsten Fall mitten in einem nicht-
+    atomaren shutil.copy2()-Fallback (siehe mover._move_file()), was eine
+    halb geschriebene Datei in TARGET_DIR zurücklassen könnte. Der Handler
+    lässt die gerade laufende process_file()-Verarbeitung bewusst fertig
+    werden (dort wird nicht geprüft) und stoppt danach nur die Annahme
+    weiterer Events - registriert auch für SIGINT, damit sich Ctrl+C
+    identisch verhält.
+    """
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+
+
+def shutdown_requested():
+    return _shutdown_requested
 
 
 def _ensure_source_dir_ready():
@@ -75,6 +105,8 @@ def run_daemon():
     import inotify.adapters
     import inotify.constants
 
+    install_signal_handlers()
+
     cfg = config.load_config()
     config.SOURCE_DIR = cfg["source_dir"]
     config.TARGET_DIR = cfg["target_dir"]
@@ -133,8 +165,12 @@ def run_daemon():
     # stirbt der komplette Daemon-Prozess (exit code 0, ohne Exception),
     # sobald z.B. mal >CONFIG_CHECK_INTERVAL Sekunden lang keine Datei
     # reinkommt - Docker startet ihn dann per Restart-Policy endlos neu.
-    while True:
+    while not shutdown_requested():
         for event in i.event_gen(yield_nones=True, timeout_s=config.CONFIG_CHECK_INTERVAL):
+            if shutdown_requested():
+                logger.info("Dämon-Modus beendet (Signal empfangen).")
+                return
+
             if (time.monotonic() - last_cfg_check) >= config.CONFIG_CHECK_INTERVAL:
                 last_cfg_check = time.monotonic()
                 current_cfg_hash, _ = config.get_config_hash()
@@ -176,3 +212,5 @@ def run_daemon():
         # statt den Daemon zu beenden.
         logger.debug("event_gen() Idle-Timeout erreicht, starte Watch-Zyklus neu.")
         write_heartbeat()
+
+    logger.info("Dämon-Modus beendet (Signal empfangen).")

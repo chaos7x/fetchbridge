@@ -1,16 +1,27 @@
 """
 Tests für _ensure_source_dir_ready() und _ensure_target_dir_ready()
 (daemon.py) - die Fail-Fast-Validierung von source_dir/target_dir vor dem
-Start des InotifyTree-Watchers.
+Start des InotifyTree-Watchers - sowie für den SIGTERM/SIGINT-Graceful-
+Shutdown-Mechanismus (install_signal_handlers()/shutdown_requested()).
 
 run_daemon() selbst wird hier bewusst nicht getestet: es importiert die
 inotify-Bibliothek erst innerhalb der Funktion (siehe Kommentar dort) und
-startet eine Endlosschleife - die beiden Validierungsfunktionen wurden
-gerade deshalb aus run_daemon() herausgezogen, damit sie isoliert und ohne
-inotify-Abhängigkeit testbar sind.
+startet eine Endlosschleife - die beiden Validierungsfunktionen sowie die
+Signal-Handling-Logik wurden gerade deshalb aus run_daemon() herausgezogen,
+damit sie isoliert und ohne inotify-Abhängigkeit testbar sind.
 """
 
+import signal
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def reset_shutdown_flag(daemon):
+    """Isoliert das Modul-Flag zwischen Tests."""
+    daemon._shutdown_requested = False
+    yield
+    daemon._shutdown_requested = False
 
 
 class _RaisingMkdirPath:
@@ -104,3 +115,25 @@ class TestEnsureTargetDirReady:
             daemon._ensure_target_dir_ready()
 
         assert exc_info.value.code == 1
+
+
+class TestInstallSignalHandlers:
+    def test_registers_handler_for_sigterm_and_sigint(self, daemon, monkeypatch):
+        registered = {}
+
+        def fake_signal(sig, handler):
+            registered[sig] = handler
+
+        monkeypatch.setattr(daemon.signal, "signal", fake_signal)
+
+        daemon.install_signal_handlers()
+
+        assert registered[signal.SIGTERM] is daemon._handle_shutdown_signal
+        assert registered[signal.SIGINT] is daemon._handle_shutdown_signal
+
+    def test_handler_sets_shutdown_flag(self, daemon):
+        assert daemon.shutdown_requested() is False
+
+        daemon._handle_shutdown_signal(signal.SIGTERM, None)
+
+        assert daemon.shutdown_requested() is True
