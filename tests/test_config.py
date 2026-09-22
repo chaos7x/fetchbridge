@@ -231,6 +231,46 @@ class TestLoadConfig:
         assert cfg["log_level"] == "INFO"
         assert cfg["source_dir"] == Path("/srv/media-pipeline/recordings")
 
+    def test_debug_env_var_is_an_alias_for_log_level_debug(self, config, tmp_path, monkeypatch):
+        """DEBUG=true/yes/1 vereinheitlicht mit tw-recorder/yt-upload, die nur dieses eine Flag kennen."""
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        main_conf = _write_main_config(tmp_path, "[general]\nsource_dir = /whatever\n")
+        monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.setenv("DEBUG", "true")
+
+        cfg = config.load_config()
+
+        assert cfg["log_level"] == "DEBUG"
+
+    def test_explicit_log_level_takes_precedence_over_debug(self, config, tmp_path, monkeypatch):
+        """DEBUG ist nur der Default - eine explizit gesetzte log_level/LOG_LEVEL gewinnt immer."""
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        main_conf = _write_main_config(tmp_path, "[general]\nlog_level = WARNING\n")
+        monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        monkeypatch.setenv("DEBUG", "true")
+
+        cfg = config.load_config()
+
+        assert cfg["log_level"] == "WARNING"
+
+    def test_debug_false_does_not_override_default_info(self, config, tmp_path, monkeypatch):
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        main_conf = _write_main_config(tmp_path, "[general]\nsource_dir = /whatever\n")
+        monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.setenv("DEBUG", "false")
+
+        cfg = config.load_config()
+
+        assert cfg["log_level"] == "INFO"
+
     def test_conf_d_overrides_main_config(self, config, tmp_path, monkeypatch):
         conf_d = tmp_path / "conf.d"
         conf_d.mkdir()

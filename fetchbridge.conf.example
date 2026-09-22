@@ -12,6 +12,8 @@
 [general]
 # Log-Level: DEBUG, INFO, WARNING, ERROR
 # log_level = INFO
+# Alternative dazu: die Umgebungsvariable DEBUG=true/yes/1 (wie bei
+# tw-recorder/yt-upload) - siehe README, keine Config-Option.
 
 # Fester Pfad für die rotierende Logdatei (max. 10 MB, 5 Backups). Ohne
 # diese Angabe wird automatisch geloggt, sobald /log tatsächlich als
