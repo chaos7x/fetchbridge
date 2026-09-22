@@ -97,6 +97,14 @@ def setup_logging(cfg: dict | None = None, app_name: str = config.APP_NAME) -> N
       Ohne einen dieser Gründe läuft die Ausgabe ohnehin bereits über
       journald (stdout-Erfassung) - eine eigene Logdatei wäre dann nur
       doppelte Datenhaltung ohne Mehrwert.
+      Nur bei expliziter Konfiguration/Docker-Volume rotiert die App selbst
+      (RotatingFileHandler, max. 10 MB, 5 Backups) - dort rotiert sonst
+      niemand. Bei erkanntem Syslog-Daemon dagegen ein einfacher FileHandler
+      ohne eigene Rotation: ein System mit laufendem Syslog-Daemon hat so gut
+      wie immer auch logrotate zur Hand (Standard-Debian-Konvention, siehe
+      mitgeliefertes /etc/logrotate.d/fetchbridge) - zwei unabhängige
+      Rotationsmechanismen auf derselben Datei würden sich nur gegenseitig
+      ins Gehege kommen.
     - Das Log-Level selbst wird hier bewusst NICHT gesetzt - das bleibt
       Sache von daemon.py's eigenem cfg["log_level"] (Config-/Env-
       gesteuert, per Hot-Reload änderbar), um dieses bestehende Verhalten
@@ -148,12 +156,16 @@ def setup_logging(cfg: dict | None = None, app_name: str = config.APP_NAME) -> N
 
     if trigger_reason is not None:
         log_path = _resolve_log_file_path(app_name, explicit_path)
+        self_rotate = trigger_reason != "Syslog-Daemon erkannt"
 
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.handlers.RotatingFileHandler(
-                str(log_path), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-            )
+            if self_rotate:
+                file_handler = logging.handlers.RotatingFileHandler(
+                    str(log_path), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+                )
+            else:
+                file_handler = logging.FileHandler(str(log_path), encoding="utf-8")
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
             active_handlers_desc.append(f"Datei ({log_path})")

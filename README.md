@@ -75,6 +75,8 @@ pip install --break-system-packages --no-deps .
 
 Danach steht der Befehl `fetchbridge` systemweit zur Verfügung (`fetchbridge --version` zum Testen).
 
+Die Logdatei landet je nach Umgebung automatisch am sinnvollsten Ort (`/var/log/fetchbridge/`, sofern beschreibbar und ein klassischer Syslog-Daemon läuft, sonst nur auf `stdout`/journald) - siehe `log_file`-Konfigurationsoption, falls ein fester Pfad gewünscht ist. Läuft ein Syslog-Daemon, rotiert die App die Datei bewusst **nicht** selbst (kein `RotatingFileHandler`) - das übernimmt das mitgelieferte `/etc/logrotate.d/fetchbridge` (nur im `.deb`-Paket enthalten; bei einer reinen `pip`-Installation ohne `.deb` selbst einrichten, falls gewünscht). Nur bei explizit gesetztem `log_file` oder einem gemounteten Docker-`/log`-Volume rotiert die App eigenständig, da dort sonst niemand rotieren würde.
+
 ### Alternative: Fertiges Debian-Paket (.deb)
 
 Jedes [GitHub Release](https://github.com/chaos7x/fetchbridge/releases) enthält zusätzlich ein `fetchbridge_<version>_all.deb` als Anhang - keine manuelle `pip`-Installation nötig, `apt`/`dpkg` löst die Abhängigkeit (`python3-inotify`) automatisch mit auf:
@@ -128,8 +130,10 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 # Log-Level: DEBUG, INFO, WARNING, ERROR
 # log_level = INFO
 
-# Fester Pfad für die rotierende Logdatei (max. 10 MB, 5 Backups). Ohne
-# diese Angabe wird automatisch geloggt, sobald /log tatsächlich als
+# Fester Pfad für die Logdatei (bei explizitem log_file oder gemountetem
+# /log-Docker-Volume rotierend, max. 10 MB, 5 Backups - läuft stattdessen ein
+# klassischer Syslog-Daemon, übernimmt logrotate die Rotation, siehe README).
+# Ohne diese Angabe wird automatisch geloggt, sobald /log tatsächlich als
 # Docker-Volume gemountet ist (reines Vorhandensein des Verzeichnisses
 # reicht nicht, siehe unten) oder ein klassischer Syslog-Daemon läuft -
 # sonst nur nach stdout (journald/docker logs erfassen das bereits).
