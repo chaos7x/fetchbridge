@@ -61,6 +61,24 @@ services:
       - /opt/docker/yt-upload/yt-upload-data/incoming:/srv/media-pipeline/incoming:rw
 ```
 
+#### 🔗 Interop mit Bare-Metal (gemeinsamer Host-Pfad)
+
+`user: "11107:11108"` oben ist nur ein Platzhalter. Läuft `tw-recorder`/`yt-upload` (oder beide) als Bare-Metal-/`.deb`-Installation statt als Container, mountest du hier statt der `/opt/docker/...`-Pfade direkt die echten Host-Verzeichnisse:
+
+```yaml
+volumes:
+  - /srv/media-pipeline/recordings:/srv/media-pipeline/recordings:rw
+  - /srv/media-pipeline/incoming:/srv/media-pipeline/incoming:rw
+```
+
+Beide gehören dort `root:media-pipeline` mit Modus `2775` (setgid, bewusst **ohne** Sticky-Bit) - Schreib-/Löschrecht hängt also rein an der **Gruppe**, nicht an der UID oder dem Datei-Owner. Die GID im `user:`-Feld muss deshalb mit der echten Host-Gruppe übereinstimmen, sonst gibt's `Permission denied`:
+
+```bash
+getent group media-pipeline   # z.B. media-pipeline:x:998:
+```
+
+Die zweite Zahl in `user: "<uid>:<gid>"` durch diese echte GID ersetzen (z.B. `user: "11107:998"`) - die UID (erste Zahl) ist frei wählbar, da sie für die Zugriffsrechte auf diese Verzeichnisse keine Rolle spielt.
+
 ---
 
 ## 🛠️ Bare-Metal-Installation (ohne Docker)
