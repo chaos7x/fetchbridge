@@ -243,3 +243,26 @@ class TestLoadConfig:
         cfg = config.load_config()
 
         assert cfg["log_level"] == "DEBUG"
+
+    def test_broken_conf_d_file_does_not_block_later_conf_d_files(self, config, tmp_path, monkeypatch):
+        """
+        Regression: config.read() mit der GESAMTEN Dateiliste auf einmal
+        bricht beim ersten Parse-Fehler komplett ab - jede danach folgende
+        Datei (auch gültige!) wurde dadurch stillschweigend nie gelesen.
+        Alphabetisch sortiert landet die kaputte Datei zwischen zwei gültigen.
+        """
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        main_conf = _write_main_config(tmp_path, "[general]\nsource_dir = /from-main\n")
+        (conf_d / "10-good.conf").write_text("[general]\nlog_level = DEBUG\n", encoding="utf-8")
+        (conf_d / "20-broken.conf").write_text("this is not valid ini at all !!! ===\n", encoding="utf-8")
+        (conf_d / "30-more.conf").write_text("[general]\ntarget_dir = /from-30-more\n", encoding="utf-8")
+
+        monkeypatch.setattr(config, "CONFIG_FILE", main_conf)
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+
+        cfg = config.load_config()
+
+        assert cfg["source_dir"] == Path("/from-main")
+        assert cfg["log_level"] == "DEBUG"
+        assert cfg["target_dir"] == Path("/from-30-more")
