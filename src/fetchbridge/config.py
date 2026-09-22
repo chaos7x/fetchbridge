@@ -178,7 +178,15 @@ def load_config():
         for e in temp_raw.split(",") if e.strip()
     }
 
-    log_level = _get(config, "general", "log_level", os.getenv("LOG_LEVEL", "INFO")).upper()
+    # DEBUG=true/yes/1 ist ein Alias für log_level=DEBUG, einheitlich mit
+    # tw-recorder/yt-upload (die nur dieses eine Bool-Flag kennen) - nur der
+    # Default-Wert, falls WEDER log_level in der Config NOCH LOG_LEVEL als
+    # ENV explizit gesetzt sind. Wer die feinere Kontrolle braucht (z.B.
+    # WARNING/ERROR zum Rauschen reduzieren), setzt weiterhin log_level/
+    # LOG_LEVEL direkt - das hat immer Vorrang vor DEBUG.
+    debug_enabled = os.getenv("DEBUG", "").strip().lower() in ("true", "yes", "1")
+    default_log_level = "DEBUG" if debug_enabled else "INFO"
+    log_level = _get(config, "general", "log_level", os.getenv("LOG_LEVEL", default_log_level)).upper()
     log_file = _get(config, "general", "log_file", os.getenv("LOG_FILE", "")).strip()
 
     cleanup_raw = _get(

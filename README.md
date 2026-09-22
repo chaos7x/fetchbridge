@@ -147,6 +147,8 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 [general]
 # Log-Level: DEBUG, INFO, WARNING, ERROR
 # log_level = INFO
+# Alternative dazu: die Umgebungsvariable DEBUG=true/yes/1 (wie bei
+# tw-recorder/yt-upload) - siehe Umgebungsvariablen-Abschnitt, keine Config-Option.
 
 # Fester Pfad für die Logdatei (bei explizitem log_file oder gemountetem
 # /log-Docker-Volume rotierend, max. 10 MB, 5 Backups - läuft stattdessen ein
@@ -191,6 +193,7 @@ fetchbridge [-h] [-D] [--healthcheck] [-v]
 * `SOURCE_DIR` / `TARGET_DIR` — Fallback, falls nicht in der Config gesetzt. Standard `/srv/media-pipeline/recordings` (dasselbe Verzeichnis wie `tw-recorder`s `STORAGE_DIR`) bzw. `/srv/media-pipeline/incoming` (dasselbe Verzeichnis wie `yt-upload`s `IN_DIR`), einheitlich für Docker und Bare-Metal. Das `.deb`-Postinst legt beide mit einer gemeinsamen Gruppe (`media-pipeline`) an, damit alle drei Dienste darauf zugreifen können.
 * `ALLOWED_EXTENSIONS` / `TEMP_EXTENSIONS` — Fallback, falls nicht in der Config gesetzt
 * `LOG_LEVEL` — Standard `INFO`
+* `DEBUG` — Standard `0`. Auf `true`/`1` setzen für erweiterte Log-Ausgaben; Alias für `LOG_LEVEL=DEBUG` (dieselbe Variable wie bei `tw-recorder`/`yt-upload`), eine explizit gesetzte `log_level`/`LOG_LEVEL` hat aber immer Vorrang.
 * `LOG_FILE` — Fallback, falls nicht in der Config gesetzt; siehe `[general]`-Sektion oben
 * `CONFIG_CHECK_INTERVAL` — Standard `15` (Sekunden zwischen Hash-Prüfungen der Config-Dateien)
 * `HEARTBEAT_FILE` — Standard `/tmp/fetchbridge.heartbeat`
