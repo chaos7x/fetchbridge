@@ -135,11 +135,18 @@ def load_config():
     if CONF_D_DIR.is_dir():
         config_files.extend(sorted(CONF_D_DIR.glob("*.conf")))
 
-    if config_files:
+    # Dateien einzeln einlesen (spätere Dateien überschreiben frühere Werte).
+    # Bewusst NICHT config.read(config_files, ...) mit der ganzen Liste auf
+    # einmal: ConfigParser.read() bricht beim ersten Parse-Fehler in der Liste
+    # komplett ab, wodurch jede DANACH folgende Datei (auch eine gültige!)
+    # stillschweigend gar nicht mehr gelesen wird - ein Tippfehler in einer
+    # frühen conf.d-Datei würde sonst alle alphabetisch späteren unsichtbar
+    # deaktivieren, ohne dass das aus der Warnung ersichtlich wäre.
+    for f in config_files:
         try:
-            config.read(config_files, encoding="utf-8")
+            config.read(f, encoding="utf-8")
         except (OSError, configparser.Error, UnicodeDecodeError) as e:
-            logger.warning(f"Fehler beim Lesen der Config-Dateien: {e}")
+            logger.warning(f"Fehler beim Lesen von {f}: {e}")
 
     source_dir = Path(_get(config, "general", "source_dir", os.getenv("SOURCE_DIR", str(SOURCE_DIR))))
     target_dir = Path(_get(config, "general", "target_dir", os.getenv("TARGET_DIR", str(TARGET_DIR))))
