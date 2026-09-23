@@ -25,6 +25,13 @@ class TestIsDedicatedMount:
     ohne diese Unterscheidung würde ein solches Verzeichnis fälschlich als
     "gemountet" durchgehen (siehe der in yt-upload/tw-recorder gefixte Bug).
 
+    Vergleicht gegen das Root-Dateisystem (/) statt nur gegen path.parent
+    (siehe _is_dedicated_mount()-Docstring): das erkennt auch einen Mount,
+    der eine Ebene höher liegt als path selbst - z.B. wenn SOURCE_DIR/
+    TARGET_DIR nicht mehr je einzeln, sondern gemeinsam als EIN Mount auf
+    ihrem gemeinsamen Elternverzeichnis eingehängt sind (siehe
+    docker-compose.yaml.example).
+
     stat() wird bewusst NICHT pauschal für alle Path-Instanzen ersetzt,
     sondern mit Fallback auf die echte Methode für nicht getestete Pfade -
     pytest ruft Path.stat() auch intern für eigene Zwecke auf.
@@ -35,25 +42,25 @@ class TestIsDedicatedMount:
         assert config._is_dedicated_mount(Path("/media/out")) is False
 
     def test_returns_false_for_plain_baked_in_directory_same_device(self, config, monkeypatch):
-        """Gleiche st_dev wie das Elternverzeichnis = kein echter Mount, nur ein normaler Ordner."""
+        """Gleiche st_dev wie das Root-Dateisystem = kein echter Mount, nur ein normaler Ordner."""
         real_stat = Path.stat
         monkeypatch.setattr(Path, "is_dir", lambda self: True)
         monkeypatch.setattr(
             Path, "stat",
-            lambda self: _FakeStat(st_dev=1) if str(self) in ("/media/out", "/media") else real_stat(self)
+            lambda self: _FakeStat(st_dev=1) if str(self) in ("/media/out", "/") else real_stat(self)
         )
 
         assert config._is_dedicated_mount(Path("/media/out")) is False
 
     def test_returns_true_for_real_mount_different_device(self, config, monkeypatch):
-        """Unterschiedliche st_dev zum Elternverzeichnis = tatsächlich eingehängtes Volume/Bind-Mount."""
+        """Unterschiedliche st_dev zum Root-Dateisystem = tatsächlich eingehängtes Volume/Bind-Mount."""
         real_stat = Path.stat
         monkeypatch.setattr(Path, "is_dir", lambda self: True)
 
         def fake_stat(self):
             if str(self) == "/media/out":
                 return _FakeStat(st_dev=2)
-            if str(self) == "/media":
+            if str(self) == "/":
                 return _FakeStat(st_dev=1)
             return real_stat(self)
 
@@ -61,12 +68,35 @@ class TestIsDedicatedMount:
 
         assert config._is_dedicated_mount(Path("/media/out")) is True
 
+    def test_returns_true_for_mount_shared_one_level_above_path(self, config, monkeypatch):
+        """
+        Regression: path selbst und sein direkter Parent liegen auf demselben
+        Mount (z.B. /srv/media-pipeline/recordings und /srv/media-pipeline,
+        wenn beide gemeinsam als EIN Mount statt getrennt eingehängt sind) -
+        ein reiner path-vs-parent-Vergleich würde das fälschlich als "kein
+        Mount" werten, obwohl /srv/media-pipeline selbst sehr wohl ein
+        eigener Mount ist.
+        """
+        real_stat = Path.stat
+        monkeypatch.setattr(Path, "is_dir", lambda self: True)
+
+        def fake_stat(self):
+            if str(self) in ("/srv/media-pipeline/recordings", "/srv/media-pipeline"):
+                return _FakeStat(st_dev=2)
+            if str(self) == "/":
+                return _FakeStat(st_dev=1)
+            return real_stat(self)
+
+        monkeypatch.setattr(Path, "stat", fake_stat)
+
+        assert config._is_dedicated_mount(Path("/srv/media-pipeline/recordings")) is True
+
     def test_permission_error_on_stat_returns_false(self, config, monkeypatch):
         real_stat = Path.stat
         monkeypatch.setattr(Path, "is_dir", lambda self: True)
 
         def raise_or_real_stat(self):
-            if str(self) in ("/media/out", "/media"):
+            if str(self) in ("/media/out", "/"):
                 raise OSError("Permission denied")
             return real_stat(self)
 
