@@ -11,7 +11,9 @@ Signal-Handling-Logik wurden gerade deshalb aus run_daemon() herausgezogen,
 damit sie isoliert und ohne inotify-Abhängigkeit testbar sind.
 """
 
+import os
 import signal
+import stat
 
 import pytest
 
@@ -28,6 +30,9 @@ class _RaisingMkdirPath:
     """Minimales Path-Double, dessen mkdir() immer fehlschlägt - vermeidet
     ein globales Monkeypatchen von pathlib.Path.mkdir (das auch pytest-
     eigene Path-Operationen während des Tests treffen könnte)."""
+
+    def is_dir(self):
+        return False
 
     def mkdir(self, **kwargs):
         raise OSError("Permission denied")
@@ -86,6 +91,7 @@ class TestEnsureTargetDirReady:
         daemon._ensure_target_dir_ready()
 
         assert target.is_dir()
+        assert stat.S_IMODE(target.stat().st_mode) == 0o2775
 
     def test_mkdir_failure_exits(self, daemon, config, monkeypatch):
         monkeypatch.setattr(config, "TARGET_DIR", _RaisingMkdirPath())
@@ -115,6 +121,51 @@ class TestEnsureTargetDirReady:
             daemon._ensure_target_dir_ready()
 
         assert exc_info.value.code == 1
+
+
+class TestMkdirGroupWritable:
+    """
+    Regression: mkdir(parents=True, exist_ok=True) ohne explizites mode=
+    verliert das Gruppen-Schreibrecht durchs Prozess-Umask (Standard-Mode
+    0o777 wird umask-maskiert, z.B. auf 0o755 bei umask 022) - das Setgid-
+    Bit selbst wird zwar vom Elternverzeichnis geerbt, das für die
+    media-pipeline-Gruppe eigentlich nötige g+w aber nicht. Derselbe Bug
+    wurde real auf einem tw-recorder-Host gefunden (Kanal-Unterordner unter
+    /srv/media-pipeline standen auf 2755 statt 2775).
+    """
+
+    def test_newly_created_dir_gets_2775_regardless_of_umask(self, daemon, tmp_path):
+        old_umask = os.umask(0o022)
+        try:
+            target = tmp_path / "incoming"
+            daemon._mkdir_group_writable(target)
+            assert stat.S_IMODE(target.stat().st_mode) == 0o2775
+        finally:
+            os.umask(old_umask)
+
+    def test_existing_dir_permissions_are_not_overwritten(self, daemon, tmp_path):
+        """Eine bewusste Admin-Anpassung (z.B. chmod 777) darf nicht überschrieben werden."""
+        target = tmp_path / "incoming"
+        target.mkdir()
+        target.chmod(0o777)
+
+        daemon._mkdir_group_writable(target)
+
+        assert stat.S_IMODE(target.stat().st_mode) == 0o777
+
+    def test_chmod_failure_logs_warning_without_raising(self, daemon, tmp_path, monkeypatch, caplog):
+        target = tmp_path / "incoming"
+
+        def raise_oserror(self, mode):
+            raise OSError("Operation not permitted")
+
+        monkeypatch.setattr(type(target), "chmod", raise_oserror)
+
+        with caplog.at_level("WARNING"):
+            daemon._mkdir_group_writable(target)  # darf nicht raisen
+
+        assert target.is_dir()
+        assert "2775" in caplog.text
 
 
 class TestInstallSignalHandlers:
