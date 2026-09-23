@@ -25,10 +25,22 @@ services:
     volumes:
       # Optionales App-Volume (bei Bedarf einkommentieren)
       # - app:/app:ro
-      # Eingangs-Ordner aus dem streamlink-recorder
-      - storage-source:/srv/media-pipeline/recordings:rw
-      # Ausgangs-Ordner für den yt-upload
-      - storage-target:/srv/media-pipeline/incoming:rw
+      # EIN gemeinsamer Bind-Mount für recordings/ UND incoming/ statt zwei
+      # getrennter Mounts: os.rename() (mover._move_file()) scheitert mit
+      # EXDEV, sobald Quelle und Ziel über unterschiedliche Bind-Mounts
+      # eingehängt sind - und zwar UNABHÄNGIG davon, ob die zugrundeliegenden
+      # Host-Verzeichnisse auf derselben Partition liegen. Der Grund: der
+      # Kernel prüft bei rename() auf dieselbe Mount-Instanz, nicht nur auf
+      # dasselbe Dateisystem/denselben st_dev - zwei separate `mount --bind`
+      # derselben Partition an unterschiedlichen Pfaden zählen für rename()
+      # trotzdem als "unterschiedliche Mounts" (empirisch verifiziert). Mit
+      # zwei Volumes fällt fetchbridge deshalb bei JEDEM Verschieben auf den
+      # langsameren Kopieren+Löschen-Fallback zurück, statt den atomaren
+      # Rename zu nutzen - bei mehrstündigen Aufnahmen ein echter
+      # Zeit-/IO-Unterschied. Setzt voraus, dass tw-recorder und yt-upload
+      # ihrerseits auf denselben Host-Baum zeigen (siehe deren jeweilige
+      # docker-compose.yaml.example).
+      - storage:/srv/media-pipeline:rw
 
 # ==========================================
 # SEPARATE VOLUMES DEKLARATION
@@ -42,37 +54,27 @@ volumes:
       o: bind
       device: ./app
 
-  # --- Bind Mounts für Daten ---
-  storage-source:
+  # --- Bind Mount für Daten ---
+  # Gemeinsamer Host-Baum für die gesamte Pipeline (recordings/, incoming/,
+  # sowie yt-uploads eigene work/done/corrupt/retry-Unterordner) - derselbe
+  # Pfad, den auch tw-recorder (nur recordings/) und yt-upload (der ganze
+  # Baum, siehe dessen docker-compose.yaml.example) einbinden. Migration von
+  # einem bestehenden Setup mit getrennten storage-source/storage-target-
+  # Verzeichnissen: deren Inhalte einmalig in diesen gemeinsamen Baum
+  # verschieben, bevor der Container neu gestartet wird.
+  storage:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/tw-recorder/recordings
-
-  # Zeigt bewusst auf die "incoming"-Unterordner von yt-uploads eigenem
-  # yt-upload-data-Bind-Mount (der dort direkt auf /srv/media-pipeline
-  # gemountet ist, siehe dessen docker-compose.yaml.example) statt auf ein
-  # eigenes Top-Level-Verzeichnis - spart yt-upload dadurch einen zweiten
-  # Bind-Mount, ohne dass fetchbridge etwas anders mounten muss.
-  storage-target:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/docker/yt-upload/yt-upload-data/incoming
+      device: /opt/docker/media-pipeline
 
   # --- Vorbereitung für spätere NFS-Mounts ---
-  # storage-source:
+  # Auch hier EIN gemeinsamer Mount für den ganzen Baum statt zwei separater
+  # NFS-Exports, aus demselben Grund wie oben.
+  # storage:
   #   driver: local
   #   driver_opts:
   #     type: nfs
   #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
-  #     device: ":/volume1/recordings"
-  #
-  # storage-target:
-  #   driver: local
-  #   driver_opts:
-  #     type: nfs
-  #     o: addr=192.168.1.100,rw,nolock,hard,nfsvers=4
-  #     device: ":/volume1/yt-upload-data/incoming"
+  #     device: ":/volume1/media-pipeline"

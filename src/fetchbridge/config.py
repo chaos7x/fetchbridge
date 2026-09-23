@@ -31,21 +31,31 @@ CONFIG_CHECK_INTERVAL = int(os.getenv("CONFIG_CHECK_INTERVAL", "15"))
 
 def _is_dedicated_mount(path: Path) -> bool:
     """
-    Prüft, ob path ein eigener Mountpoint ist (Docker-Volume/Bind-Mount) statt
-    nur ein gewöhnliches Verzeichnis, das das Dockerfile per `mkdir -p` fest
-    ins Image gebacken hat (z.B. /media/in, /media/out, /log) - eine reine
-    is_dir()-Prüfung kann diese beiden Fälle nicht unterscheiden, da
-    `mkdir -p` das Verzeichnis auch ganz ohne jeden Mount anlegt (derselbe
+    Prüft, ob path auf einem eigens eingehängten Docker-Volume/Bind-Mount
+    liegt statt nur in einem gewöhnlichen Verzeichnis, das das Dockerfile per
+    `mkdir -p` fest ins Image gebacken hat (z.B. /media/in, /media/out, /log)
+    - eine reine is_dir()-Prüfung kann diese beiden Fälle nicht unterscheiden,
+    da `mkdir -p` das Verzeichnis auch ganz ohne jeden Mount anlegt (derselbe
     Bug wie bei yt-upload/tw-recorder: Datei-Logging bzw. Datenverzeichnisse
-    liefen unbemerkt gegen den flüchtigen Container-Layer). Vergleicht dazu
-    die Geräte-ID (st_dev) von path und seinem Elternverzeichnis:
-    unterschiedliche st_dev bedeutet, dass dort tatsächlich ein
-    Volume/Bind-Mount eingehängt ist.
+    liefen unbemerkt gegen den flüchtigen Container-Layer).
+    Vergleicht dazu die Geräte-ID (st_dev) von path gegen die des
+    Container-Root-Dateisystems (/) statt nur gegen path.parent: ein Vergleich
+    ausschließlich mit dem direkten Elternverzeichnis würde einen Mount
+    übersehen, der eine Ebene höher liegt als path selbst - z.B. wenn
+    SOURCE_DIR (/srv/media-pipeline/recordings) und TARGET_DIR
+    (/srv/media-pipeline/incoming) nicht mehr je einzeln, sondern gemeinsam
+    als EIN Mount auf /srv/media-pipeline eingehängt sind (siehe
+    docker-compose.yaml.example, wegen os.rename()/EXDEV zwischen getrennten
+    Mounts nötig) - path und sein direkter Parent lägen dann auf demselben
+    Gerät, obwohl tatsächlich ein Mount existiert. Eine andere st_dev als das
+    Root-Dateisystem bedeutet dagegen unabhängig von der Mount-Tiefe, dass
+    irgendwo zwischen path und / tatsächlich ein Volume/Bind-Mount eingehängt
+    ist.
     """
     if not path.is_dir():
         return False
     try:
-        return path.stat().st_dev != path.parent.stat().st_dev
+        return path.stat().st_dev != Path("/").stat().st_dev
     except OSError:
         return False
 

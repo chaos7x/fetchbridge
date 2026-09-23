@@ -51,27 +51,25 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
     volumes:
-      # Quell-Ordner (Eingang aus tw-recorder)
-      - /opt/docker/tw-recorder/recordings:/srv/media-pipeline/recordings:rw
-      # Ziel-Ordner (Eingang für yt-upload) - zeigt bewusst auf die "incoming"-
-      # Unterordner von yt-uploads eigenem yt-upload-data-Mount (der dort
-      # direkt auf /srv/media-pipeline gemountet ist) statt auf ein eigenes
-      # Top-Level-Verzeichnis, spart yt-upload dadurch einen zweiten
-      # Bind-Mount (siehe yt-upload/docker-compose.yaml.example)
-      - /opt/docker/yt-upload/yt-upload-data/incoming:/srv/media-pipeline/incoming:rw
+      # EIN gemeinsamer Bind-Mount für recordings/ UND incoming/ statt zwei
+      # getrennter Mounts - siehe "Warum ein einzelner Mount?" unten.
+      - /opt/docker/media-pipeline:/srv/media-pipeline:rw
 ```
+
+#### ⚠️ Warum ein einzelner Mount?
+
+Zwei getrennte Bind-Mounts (`recordings` und `incoming` je einzeln eingebunden) *sehen* im Container zwar wie normale Unterordner desselben Baums aus, sind für den Kernel aber unterschiedliche Mount-Instanzen - `os.rename()` (der von `mover.py` bevorzugte atomare Pfad) scheitert dann mit `EXDEV` und fällt auf das langsamere Kopieren+Löschen zurück, selbst wenn beide Host-Verzeichnisse zufällig auf derselben Partition liegen. Das gilt für jede Art von getrennten Mounts gleichermaßen - egal ob zwei Docker-Volumes, zwei einzelne `-v`-Bind-Mounts oder zwei separate NFS-Exports. Ein einzelner Mount über den gemeinsamen Elternordner (wie oben) vermeidet das vollständig.
 
 #### 🔗 Interop mit Bare-Metal (gemeinsamer Host-Pfad)
 
-`user: "11107:11108"` oben ist nur ein Platzhalter. Läuft `tw-recorder`/`yt-upload` (oder beide) als Bare-Metal-/`.deb`-Installation statt als Container, mountest du hier statt der `/opt/docker/...`-Pfade direkt die echten Host-Verzeichnisse:
+`user: "11107:11108"` oben ist nur ein Platzhalter. Läuft `tw-recorder`/`yt-upload` (oder beide) als Bare-Metal-/`.deb`-Installation statt als Container, mountest du hier - aus demselben Grund wie oben - den gemeinsamen `/srv/media-pipeline`-Elternordner als **einen** Mount statt `recordings`/`incoming` einzeln:
 
 ```yaml
 volumes:
-  - /srv/media-pipeline/recordings:/srv/media-pipeline/recordings:rw
-  - /srv/media-pipeline/incoming:/srv/media-pipeline/incoming:rw
+  - /srv/media-pipeline:/srv/media-pipeline:rw
 ```
 
-Beide gehören dort `root:media-pipeline` mit Modus `2775` (setgid, bewusst **ohne** Sticky-Bit) - Schreib-/Löschrecht hängt also rein an der **Gruppe**, nicht an der UID oder dem Datei-Owner. Die GID im `user:`-Feld muss deshalb mit der echten Host-Gruppe übereinstimmen, sonst gibt's `Permission denied`:
+Der Ordner gehört dort `root:media-pipeline` mit Modus `2775` (setgid, bewusst **ohne** Sticky-Bit) - Schreib-/Löschrecht hängt also rein an der **Gruppe**, nicht an der UID oder dem Datei-Owner. Die GID im `user:`-Feld muss deshalb mit der echten Host-Gruppe übereinstimmen, sonst gibt's `Permission denied`:
 
 ```bash
 getent group media-pipeline   # z.B. media-pipeline:x:998:
