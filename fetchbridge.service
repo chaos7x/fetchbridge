@@ -13,17 +13,23 @@ Restart=on-failure
 RestartSec=5
 
 # --- Hardening ---
-# ReadWritePaths deckt genau das ab, was der Daemon tatsaechlich beschreibt:
-# /srv/media-pipeline (SOURCE_DIR fuer cleanup_empty_dirs()' rmdir, TARGET_DIR
-# fuer die eigentlichen Verschiebungen/Kopien) und /var/log/fetchbridge
-# (Standard-Logpfad, siehe logging_setup._resolve_log_file_path()). Wer
-# abweichende Pfade konfiguriert (LOG_FILE/SOURCE_DIR/TARGET_DIR/...), muss
-# sie hier ergaenzen, sonst schlaegt der jeweilige Schreibzugriff fehl.
+# ReadWritePaths deckt genau die beiden Unterverzeichnisse ab, die der Daemon
+# tatsaechlich beschreibt: SOURCE_DIR (cleanup_empty_dirs()' rmdir) und
+# TARGET_DIR (die eigentlichen Verschiebungen/Kopien), sowie
+# /var/log/fetchbridge (Standard-Logpfad, siehe
+# logging_setup._resolve_log_file_path()). Bewusst NICHT das gemeinsame
+# /srv/media-pipeline als Ganzes freigegeben, obwohl fetchbridge per
+# media-pipeline-Gruppenmitgliedschaft ohnehin Schreibrechte auf den
+# gesamten Baum haette (u.a. yt-uploads work/done/corrupt/retry) - das
+# Hardening reduziert den Blast-Radius hier bewusst auf genau das, was der
+# Code tatsaechlich anfasst. Wer abweichende Pfade konfiguriert
+# (LOG_FILE/SOURCE_DIR/TARGET_DIR/...), muss sie hier ergaenzen, sonst
+# schlaegt der jeweilige Schreibzugriff fehl.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/srv/media-pipeline /var/log/fetchbridge
+ReadWritePaths=/srv/media-pipeline/recordings /srv/media-pipeline/incoming /var/log/fetchbridge
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
