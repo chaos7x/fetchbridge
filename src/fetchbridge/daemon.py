@@ -73,6 +73,32 @@ def _ensure_source_dir_ready():
         sys.exit(1)
 
 
+def _mkdir_group_writable(path: Path) -> None:
+    """
+    Legt path an und erzwingt beim tatsächlichen Neuanlegen explizit 2775
+    statt sich auf mkdir()s Standard-Mode zu verlassen: mkdir() allein würde
+    das Gruppen-Schreibrecht durch das Prozess-Umask verlieren (Standard-
+    Mode 0o777 wird umask-maskiert, z.B. auf 0o755 bei umask 022) - das
+    Setgid-Bit selbst wird zwar vom Elternverzeichnis geerbt, das für die
+    media-pipeline-Gruppe eigentlich nötige g+w aber nicht. Ohne das könnten
+    tw-recorder/yt-upload (Gruppenmitglieder, aber nicht Owner) dort keine
+    Dateien mehr ablegen/verschieben - exakt das Szenario, für das die
+    2775-Rechte auf /srv/media-pipeline überhaupt eingeführt wurden.
+    Nur beim tatsächlichen Neuanlegen gesetzt, sonst würde eine bewusste
+    Admin-Anpassung überschrieben (derselbe Fix wie in postinst.sh und
+    tw-recorders _ensure_channel_dir()). Ein Fehlschlag beim mkdir() selbst
+    wird bewusst NICHT abgefangen - das bleibt Sache der Aufrufer (teils
+    fail-fast mit sys.exit(1), teils schon bisher ungefangen).
+    """
+    newly_created = not path.is_dir()
+    path.mkdir(parents=True, exist_ok=True)
+    if newly_created:
+        try:
+            path.chmod(0o2775)
+        except OSError as e:
+            logger.warning(f"Konnte Rechte von {path} nicht auf 2775 setzen: {e}")
+
+
 def _ensure_target_dir_ready():
     """
     Legt target_dir bei Bedarf an und validiert innerhalb eines Containers
@@ -83,7 +109,7 @@ def _ensure_target_dir_ready():
     bei source_dir, da bereits verarbeitete Dateien betroffen wären).
     """
     try:
-        config.TARGET_DIR.mkdir(parents=True, exist_ok=True)
+        _mkdir_group_writable(config.TARGET_DIR)
     except OSError as e:
         logger.critical(f"❌ target_dir '{config.TARGET_DIR}' konnte nicht angelegt werden: {e}. Beende Prozess.")
         sys.exit(1)
@@ -193,7 +219,7 @@ def run_daemon():
                         config.STABILITY_CHECK_INTERVAL = cfg["stability_check_interval"]
                         config.STABILITY_MAX_CHECKS = cfg["stability_max_checks"]
                         logging.getLogger().setLevel(cfg["log_level"])
-                        config.TARGET_DIR.mkdir(parents=True, exist_ok=True)
+                        _mkdir_group_writable(config.TARGET_DIR)
 
             if event is None:
                 continue
