@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# PROVIDE: fetchbridge
+# REQUIRE: LOGIN NETWORKING syslogd
+# KEYWORD: shutdown
+#
+# FreeBSD-rc.d-Pendant zu debian/fetchbridge.service. Installation und
+# Aktivierung siehe README.md ("FreeBSD"). Wird bewusst NICHT automatisch
+# aktiviert:
+#
+#   sysrc fetchbridge_enable=YES
+#   service fetchbridge start
+#
+# Variablen (in /etc/rc.conf bzw. per sysrc):
+#   fetchbridge_enable
+#       YES zum Aktivieren (Standard: NO)
+#   fetchbridge_runas
+#       Dienstuser (Standard: fetchbridge). Bewusst nicht fetchbridge_user:
+#       damit wuerde rc.subr schon daemon(8) selbst per su als dieser
+#       User starten, daemon -u braucht aber root.
+#   fetchbridge_command
+#       Pfad zum Programm (Standard: /usr/local/bin/fetchbridge)
+#   fetchbridge_args
+#       Zusaetzliche Argumente nach -D (Standard: leer). Bewusst nicht
+#       fetchbridge_flags: das haengt rc.subr an daemon(8) statt an
+#       fetchbridge an.
+#   fetchbridge_env
+#       Umgebungsvariablen, z.B. "LOG_LEVEL=DEBUG" (wertet rc.subr aus)
+#
+# fetchbridge daemonisiert sich nicht selbst (laeuft im Vordergrund wie unter
+# systemd Type=simple) - daemon(8) uebernimmt Forken, Userwechsel (-u ruft
+# initgroups() auf, damit greift auch die media-pipeline-Zusatzgruppe wie
+# SupplementaryGroups= in der systemd-Unit) und Neustart bei Absturz (-r,
+# wie Restart=on-failure). -S leitet stdout/stderr an syslog weiter: ohne
+# /proc erkennt die App keinen laufenden syslogd und loggt nur auf stdout.
+# SIGTERM an den daemon(8)-Supervisor wird an den Prozess weitergereicht.
+
+. /etc/rc.subr
+
+name="fetchbridge"
+rcvar="fetchbridge_enable"
+
+load_rc_config $name
+
+: ${fetchbridge_enable:="NO"}
+: ${fetchbridge_runas:="fetchbridge"}
+: ${fetchbridge_command:="/usr/local/bin/fetchbridge"}
+: ${fetchbridge_args:=""}
+
+pidfile="/var/run/${name}.pid"
+procname="/usr/sbin/daemon"
+command="/usr/sbin/daemon"
+command_args="-f -S -T fetchbridge -r -R 5 -P ${pidfile} -u ${fetchbridge_runas} ${fetchbridge_command} -D ${fetchbridge_args}"
+
+run_rc_command "$1"
