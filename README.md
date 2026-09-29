@@ -114,6 +114,32 @@ systemctl enable --now fetchbridge
 service fetchbridge start
 ```
 
+### Alternative: FreeBSD (rc.d)
+
+Für FreeBSD ≥ 14.5 (native inotify in der libc) liegt unter `freebsd/rc.d/fetchbridge` ein rc.d-Skript bei, das Pendant zum systemd-Service aus `debian/`. Ein Paket gibt es dafür nicht, die Einrichtung ist manuell und aktiviert den Dienst bewusst nicht von selbst. Bisher nur gegen die Doku geschrieben, noch nicht auf einem echten FreeBSD-System getestet.
+
+```sh
+# Abhängigkeiten (py311 an die installierte Python-Version anpassen)
+pkg install python3 py311-pip
+cd /pfad/zu/fetchbridge
+pip install --no-deps .
+
+# Dienstuser und gemeinsame Pipeline-Gruppe (wie debian/postinst)
+pw groupshow media-pipeline >/dev/null 2>&1 || pw groupadd media-pipeline
+pw usershow fetchbridge >/dev/null 2>&1 || pw useradd fetchbridge -d /nonexistent -s /usr/sbin/nologin -G media-pipeline
+install -d -o root -g media-pipeline -m 2775 /srv/media-pipeline /srv/media-pipeline/recordings /srv/media-pipeline/incoming
+install -d /etc/fetchbridge
+
+# rc.d-Skript installieren und aktivieren
+install -m 755 freebsd/rc.d/fetchbridge /usr/local/etc/rc.d/fetchbridge
+sysrc fetchbridge_enable=YES
+service fetchbridge start
+```
+
+Vor dem `service fetchbridge start` wie unter Linux `/etc/fetchbridge/fetchbridge.conf` anlegen (Vorlage: `fetchbridge.conf.example`).
+
+Das Skript startet `fetchbridge -D` über `daemon(8)` (Neustart bei Absturz, Userwechsel inkl. `media-pipeline`-Zusatzgruppe) und leitet die Ausgabe an syslog weiter (Tag `fetchbridge`, landet standardmäßig in `/var/log/messages`). Weitere Einstellungen (`fetchbridge_runas`, `fetchbridge_args`, `fetchbridge_env`) stehen im Kopf des Skripts.
+
 ### Alternative: Standalone .pyz (kein pip/apt nötig)
 
 `./build-pyz.sh` baut aus `src/` ein einziges, selbst-enthaltenes `fetchbridge.pyz` - läuft auf jedem System mit einem nackten `python3`, ganz ohne vorherige `pip install`/`apt install`:

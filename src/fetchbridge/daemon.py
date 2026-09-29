@@ -85,7 +85,7 @@ def _mkdir_group_writable(path: Path) -> None:
     Dateien mehr ablegen/verschieben - exakt das Szenario, für das die
     2775-Rechte auf /srv/media-pipeline überhaupt eingeführt wurden.
     Nur beim tatsächlichen Neuanlegen gesetzt, sonst würde eine bewusste
-    Admin-Anpassung überschrieben (derselbe Fix wie in postinst.sh und
+    Admin-Anpassung überschrieben (derselbe Fix wie in debian/postinst.sh und
     tw-recorders _ensure_channel_dir()). Ein Fehlschlag beim mkdir() selbst
     wird bewusst NICHT abgefangen - das bleibt Sache der Aufrufer (teils
     fail-fast mit sys.exit(1), teils schon bisher ungefangen).
