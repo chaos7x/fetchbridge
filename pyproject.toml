@@ -21,9 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: System :: Filesystems",
 ]
-dependencies = [
-    "inotify",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/chaos7x/fetchbridge"
