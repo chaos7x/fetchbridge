@@ -31,6 +31,12 @@ def healthcheck():
 
 
 @pytest.fixture(scope="session")
+def inotify_tree():
+    from fetchbridge import inotify_tree
+    return inotify_tree
+
+
+@pytest.fixture(scope="session")
 def daemon():
     from fetchbridge import daemon
     return daemon

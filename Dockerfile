@@ -16,8 +16,8 @@ COPY pyproject.toml /build/pyproject.toml
 COPY src/ /build/src/
 # --target statt eines normalen `pip install` in system site-packages:
 # liefert reine Python-Dateien flach in einem eigenen Ordner, den die finale
-# Stage 1:1 übernehmen kann. --no-deps, da inotify unter Debian bewusst über
-# apt (python3-inotify) kommt, nicht über pip (siehe LAYER 2 der Final-Stage).
+# Stage 1:1 übernehmen kann. --no-deps: fetchbridge hat keine
+# Laufzeit-Abhängigkeiten (inotify über eigenen ctypes-Wrapper).
 RUN pip install --break-system-packages --no-deps --no-cache-dir /build --target=/install
 
 # ==========================================
@@ -31,8 +31,7 @@ ENV PYTHONUNBUFFERED=1
 # ==========================================
 # LAYER 1: System-Pakete
 # ==========================================
-# python3-inotify ist unter Debian das korrekte Paket (importiert als
-# `inotify.adapters`). Bewusst OHNE pip/setuptools - die werden nur im
+# Bewusst OHNE pip/setuptools - die werden nur im
 # Builder (STUFE 1) gebraucht.
 # apt-get upgrade: das Base-Image selbst (Pakete wie gzip/perl-base/libssl3/
 # libsqlite3/libpcre2, die nicht über unsere eigenen apt-get-install-Zeilen
@@ -43,7 +42,6 @@ ENV PYTHONUNBUFFERED=1
 # verfügbaren Paketversionen, unabhängig vom Alter des Base-Images selbst.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     python3 \
-    python3-inotify \
     libcom-err2 \
     mc \
     && rm -rf /var/lib/apt/lists/*

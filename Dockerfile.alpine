@@ -1,8 +1,8 @@
 # ==========================================
-# STUFE 1: Builder - installiert fetchbridge + inotify isoliert per pip
+# STUFE 1: Builder - installiert fetchbridge isoliert per pip
 # ==========================================
 # Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
-# nur die fertig installierten Pakete werden per COPY --from übernommen.
+# nur das fertig installierte Package wird per COPY --from übernommen.
 FROM alpine:3 AS builder
 
 RUN apk add --no-cache \
@@ -11,19 +11,6 @@ RUN apk add --no-cache \
     py3-setuptools
 
 WORKDIR /build
-
-# WICHTIG: Alpines apk-Paket "py3-inotify" packt tatsächlich ein anderes,
-# unpassendes Projekt (pyinotify statt inotify von dsoprea) - das Skript
-# importiert `inotify.adapters`, was dieses Paket nicht bereitstellt.
-# Daher hier bewusst per pip statt apk, in einen eigenen --target-Ordner
-# (nicht gemeinsam mit fetchbridge selbst - zwei pip-Installationen in
-# denselben Zielordner haben bei einem Schwesterprojekt (tw-recorder) dazu
-# geführt, dass der zweite Aufruf keinen Entry-Point mehr erzeugte).
-# --no-deps: inotify deklariert fälschlich "build" (samt dessen eigenen
-# Abhängigkeiten packaging/pyproject_hooks) als Laufzeit-Dependency, obwohl
-# es nirgends importiert wird (nur zum Wheel-Bauen gebraucht) - ohne
-# --no-deps würde das ungenutzt in den Ordner mitinstalliert.
-RUN pip install --break-system-packages --no-deps --no-cache-dir --no-build-isolation --target=/install/inotify inotify
 
 COPY pyproject.toml /build/pyproject.toml
 COPY src/ /build/src/
@@ -66,7 +53,7 @@ RUN addgroup -S fetchbridge \
 
 WORKDIR /app
 ENV HOME=/app
-ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
+ENV PYTHONPATH=/usr/local/lib/fetchbridge
 
 # ==========================================
 # LAYER 1: Verzeichnisse anlegen & Berechtigungen setzen
@@ -79,10 +66,9 @@ ENV PYTHONPATH=/usr/local/lib/fetchbridge:/usr/local/lib/inotify
 RUN mkdir -p /log /etc/fetchbridge/conf.d /srv/media-pipeline/recordings /srv/media-pipeline/incoming && chmod 1777 /log /srv/media-pipeline/recordings /srv/media-pipeline/incoming
 
 # ==========================================
-# LAYER 2: fetchbridge + inotify aus dem Builder übernehmen
+# LAYER 2: fetchbridge aus dem Builder übernehmen
 # ==========================================
 COPY --from=builder /install/fetchbridge /usr/local/lib/fetchbridge
-COPY --from=builder /install/inotify /usr/local/lib/inotify
 COPY --from=builder /install/fetchbridge/bin/fetchbridge /usr/local/bin/fetchbridge
 
 # ==========================================

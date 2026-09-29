@@ -125,11 +125,10 @@ def _ensure_target_dir_ready():
 
 def run_daemon():
     # Lazy statt Modul-Top-Level-Import: --healthcheck/--version sollen auch
-    # funktionieren, wenn inotify aus irgendeinem Grund nicht importierbar
-    # ist (z.B. eine kaputte/inkompatible Installation) - nur der Dämon-Modus
-    # braucht es tatsächlich.
-    import inotify.adapters
-    import inotify.constants
+    # funktionieren, wenn inotify nicht verfügbar ist (inotify_tree wirft
+    # ImportError, wenn die libc kein inotify bereitstellt, z.B. OpenBSD/
+    # macOS/FreeBSD < 14.5) - nur der Dämon-Modus braucht es tatsächlich.
+    from fetchbridge import inotify_tree
 
     install_signal_handlers()
 
@@ -174,9 +173,9 @@ def run_daemon():
     # abonniert InotifyTree ALLE Event-Typen, inkl. reiner Verzeichnis-Lesezugriffe -
     # genau solche erzeugt cleanup_empty_dirs() selbst (iterdir()/rmdir() auf dem
     # überwachten Baum), was sonst unnötige Selbst-Events erzeugen würde.
-    watch_mask = inotify.constants.IN_CLOSE_WRITE | inotify.constants.IN_MOVED_TO
+    watch_mask = inotify_tree.IN_CLOSE_WRITE | inotify_tree.IN_MOVED_TO
     try:
-        i = inotify.adapters.InotifyTree(str(config.SOURCE_DIR), mask=watch_mask)
+        i = inotify_tree.InotifyTree(str(config.SOURCE_DIR), mask=watch_mask)
     except Exception as e:  # noqa: BLE001 - inotify-Bibliothek hat keine eng gefasste Exception-Hierarchie; jeder Fehler hier soll fail-fast mit klarer Meldung beenden statt mit kryptischem Traceback
         logger.critical(f"❌ Konnte InotifyTree für '{config.SOURCE_DIR}' nicht starten: {e}. Beende Prozess.")
         sys.exit(1)

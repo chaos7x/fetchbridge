@@ -10,7 +10,7 @@ Eine Übersicht der internen Architektur (Module, Datenfluss, Diagramm) findet s
 
 ## 🚀 Features
 
-* **Echtzeit-Überwachung:** Reagiert ohne Verzögerung auf Dateisystem-Events (`IN_MOVED_TO`, `IN_CLOSE_WRITE`) mittels `inotify`.
+* **Echtzeit-Überwachung:** Reagiert ohne Verzögerung auf Dateisystem-Events (`IN_MOVED_TO`, `IN_CLOSE_WRITE`) mittels `inotify` - über einen eigenen, abhängigkeitsfreien ctypes-Wrapper (`inotify_tree.py`), der neben Linux auch für FreeBSD ≥ 14.5 ausgelegt ist.
 * **Intelligente RW/RO-Erkennung:**
   * **Read-Write (RW):** Verschiebt Dateien direkt ins Zielverzeichnis und räumt leere Quellordner automatisch auf.
   * **Read-Only (RO):** Kopiert Dateien sicher, falls das Quellverzeichnis schreibgeschützt gemountet ist.
@@ -81,10 +81,10 @@ Die zweite Zahl in `user: "<uid>:<gid>"` durch diese echte GID ersetzen (z.B. `u
 
 ## 🛠️ Bare-Metal-Installation (ohne Docker)
 
-`fetchbridge` läuft auch direkt auf dem Host. `inotify` ist die einzige echte Abhängigkeit (Kernfunktion, nicht optional) und kommt bewusst über den jeweiligen Paketmanager statt über PyPI, wo möglich - `pip` installiert nur das eigene Package:
+`fetchbridge` läuft auch direkt auf dem Host. Es hat keine Python-Abhängigkeiten außer der Standardbibliothek (inotify wird per ctypes direkt aus der libc angesprochen) - `pip` installiert nur das eigene Package:
 
 ```bash
-apt install python3-pip python3-setuptools python3-inotify
+apt install python3-pip python3-setuptools
 cd /pfad/zu/fetchbridge
 pip install --break-system-packages --no-deps .
 ```
@@ -95,7 +95,7 @@ Die Logdatei landet je nach Umgebung automatisch am sinnvollsten Ort (`/var/log/
 
 ### Alternative: Fertiges Debian-Paket (.deb)
 
-Jedes [GitHub Release](https://github.com/chaos7x/fetchbridge/releases) enthält zusätzlich ein `fetchbridge_<version>_all.deb` als Anhang - keine manuelle `pip`-Installation nötig, `apt`/`dpkg` löst die Abhängigkeit (`python3-inotify`) automatisch mit auf:
+Jedes [GitHub Release](https://github.com/chaos7x/fetchbridge/releases) enthält zusätzlich ein `fetchbridge_<version>_all.deb` als Anhang - keine manuelle `pip`-Installation nötig:
 
 ```bash
 wget https://github.com/chaos7x/fetchbridge/releases/latest/download/fetchbridge_<version>_all.deb
@@ -116,7 +116,7 @@ service fetchbridge start
 
 ### Alternative: Standalone .pyz (kein pip/apt nötig)
 
-`./build-pyz.sh` baut aus `src/` ein einziges, selbst-enthaltenes `fetchbridge.pyz` samt `inotify` - läuft auf jedem System mit einem nackten `python3`, ganz ohne vorherige `pip install`/`apt install`:
+`./build-pyz.sh` baut aus `src/` ein einziges, selbst-enthaltenes `fetchbridge.pyz` - läuft auf jedem System mit einem nackten `python3`, ganz ohne vorherige `pip install`/`apt install`:
 
 ```bash
 ./build-pyz.sh
@@ -129,11 +129,9 @@ service fetchbridge start
 
 | Dockerfile | Basis | Installationsweg |
 |---|---|---|
-| `Dockerfile` (Standard) | `debian:trixie-slim` | `apt` für `python3-inotify` (korrektes Paket), `pip install --no-deps .` für fetchbridge selbst |
-| `Dockerfile.alpine` | `alpine:3` | `inotify` **per `pip`**, nicht `apk` - Alpines `py3-inotify`-Paket packt tatsächlich ein anderes, unpassendes Projekt (`pyinotify` statt `inotify`) |
-| `Dockerfile.pyimg` | `python:3-slim` | Ein einziger `pip install .` - `inotify` ist in `pyproject.toml` als Dependency deklariert, pip löst es automatisch mit auf |
-
-**Wichtiger Hinweis zu Alpine:** Falls du selbst mal `apk add py3-inotify` für ein anderes Projekt in Erwägung ziehst - das Paket ist trotz des Namens **nicht** das hier (und in vielen ähnlichen Tools) verwendete `inotify`-Package von PyPI (`import inotify.adapters`), sondern das ältere, API-inkompatible `pyinotify`. Für `fetchbridge` wird das korrekte Package deshalb explizit per `pip` installiert.
+| `Dockerfile` (Standard) | `debian:trixie-slim` | `apt` für `python3`, `pip install --no-deps .` für fetchbridge selbst |
+| `Dockerfile.alpine` | `alpine:3` | Wie oben, aber `apk` statt `apt` |
+| `Dockerfile.pyimg` | `python:3-slim` | Ein einziger `pip install .` |
 
 ---
 

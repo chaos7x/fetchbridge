@@ -187,7 +187,6 @@ jobs:
             --description "Inotify-basierte Bridge zwischen Verzeichnissen (RO/RW-Erkennung)" \
             --url "https://github.com/${{ github.repository }}" \
             --depends python3 \
-            --depends python3-inotify \
             --depends adduser \
             --config-files /etc/fetchbridge/fetchbridge.conf \
             --config-files /etc/logrotate.d/fetchbridge \
