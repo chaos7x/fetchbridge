@@ -28,8 +28,8 @@ Der Container arbeitet intern mit zwei primären Datenpfaden:
 
 | Pfad im Container | Funktion | Standard-Format |
 | :--- | :--- | :--- |
-| `/srv/media-pipeline/recordings` | **Quellverzeichnis** (Eingang für `fetchbridge`, geteilt mit `tw-recorder`s `STORAGE_DIR`) | `.mkv`, `.mp4`, `.webm` |
-| `/srv/media-pipeline/incoming` | **Zielverzeichnis** (Ausgang für Folge-Tools, geteilt mit `yt-upload`s `IN_DIR`) | `.mkv`, `.mp4`, `.webm` |
+| `/srv/media-pipeline/recordings` | **Quellverzeichnis** (Eingang für `fetchbridge`, geteilt mit `tw-recorder`s `STORAGE_DIR`) | `.mkv`, `.mp4`, `.mov`, `.webm` |
+| `/srv/media-pipeline/incoming` | **Zielverzeichnis** (Ausgang für Folge-Tools, geteilt mit `yt-upload`s `IN_DIR`) | `.mkv`, `.mp4`, `.mov`, `.webm` |
 | `/log` | Log-Dateien (Optional, siehe unten) | Logs / App-Output |
 
 ---
@@ -164,7 +164,7 @@ Die Hauptkonfiguration erfolgt über `/etc/fetchbridge/fetchbridge.conf` (bzw. `
 
 [mover]
 # Kommagetrennte Liste erlaubter Datei-Endungen
-# allowed_extensions = .mkv,.mp4,.webm
+# allowed_extensions = .mkv,.mp4,.mov,.webm
 
 # Kommagetrennte Liste von Endungen, die als "noch nicht fertig" gelten
 # temp_extensions = .part,.ytdl,.tmp,.temp

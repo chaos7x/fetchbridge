@@ -14,7 +14,7 @@ APP_NAME = "fetchbridge"
 CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "/etc/fetchbridge/fetchbridge.conf"))
 CONF_D_DIR = Path(os.getenv("CONF_D_DIR", "/etc/fetchbridge/conf.d"))
 
-ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".webm"}
+ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".mov", ".webm"}
 TEMP_EXTENSIONS = {".part", ".ytdl", ".tmp", ".temp"}
 WATCH_EVENTS = {"IN_MOVED_TO", "IN_CLOSE_WRITE"}
 CLEANUP_EMPTY_DIRS = False
@@ -172,7 +172,7 @@ def load_config():
 
     allowed_raw = _get(
         config, "mover", "allowed_extensions",
-        os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.webm")
+        os.getenv("ALLOWED_EXTENSIONS", ".mkv,.mp4,.mov,.webm")
     )
     allowed_extensions = {
         e.strip().lower() if e.strip().startswith(".") else f".{e.strip().lower()}"
