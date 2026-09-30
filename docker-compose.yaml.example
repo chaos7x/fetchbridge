@@ -67,7 +67,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /opt/docker/media-pipeline
+      device: /srv/media-pipeline
 
   # --- Vorbereitung für spätere NFS-Mounts ---
   # Auch hier EIN gemeinsamer Mount für den ganzen Baum statt zwei separater

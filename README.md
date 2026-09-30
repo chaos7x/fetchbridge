@@ -53,7 +53,7 @@ services:
     volumes:
       # EIN gemeinsamer Bind-Mount für recordings/ UND incoming/ statt zwei
       # getrennter Mounts - siehe "Warum ein einzelner Mount?" unten.
-      - /opt/docker/media-pipeline:/srv/media-pipeline:rw
+      - /srv/media-pipeline:/srv/media-pipeline:rw
 ```
 
 #### ⚠️ Warum ein einzelner Mount?
@@ -62,12 +62,7 @@ Zwei getrennte Bind-Mounts (`recordings` und `incoming` je einzeln eingebunden) 
 
 #### 🔗 Interop mit Bare-Metal (gemeinsamer Host-Pfad)
 
-`user: "11107:11108"` oben ist nur ein Platzhalter. Läuft `tw-recorder`/`yt-upload` (oder beide) als Bare-Metal-/`.deb`-Installation statt als Container, mountest du hier - aus demselben Grund wie oben - den gemeinsamen `/srv/media-pipeline`-Elternordner als **einen** Mount statt `recordings`/`incoming` einzeln:
-
-```yaml
-volumes:
-  - /srv/media-pipeline:/srv/media-pipeline:rw
-```
+`user: "11107:11108"` oben ist nur ein Platzhalter. Der Mount oben nutzt bereits denselben Host-Pfad `/srv/media-pipeline`, den auch die Bare-Metal-/`.deb`-Installationen von `tw-recorder`/`yt-upload` nutzen - Container und Bare-Metal teilen sich den Baum also ohne weitere Anpassung.
 
 Der Ordner gehört dort `root:media-pipeline` mit Modus `2775` (setgid, bewusst **ohne** Sticky-Bit) - Schreib-/Löschrecht hängt also rein an der **Gruppe**, nicht an der UID oder dem Datei-Owner. Die GID im `user:`-Feld muss deshalb mit der echten Host-Gruppe übereinstimmen, sonst gibt's `Permission denied`:
 
