@@ -52,13 +52,13 @@ PACKAGES = [
         },
         "modes": {"/usr/local/etc/rc.d/fetchbridge": 0o755},
         "post_install": """\
-mkdir -p /etc/fetchbridge/conf.d
-if [ ! -e /etc/fetchbridge/fetchbridge.conf ]; then
-    cp {examples}/fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
-fi
 pw groupshow media-pipeline >/dev/null 2>&1 || pw groupadd media-pipeline
 if ! pw usershow fetchbridge >/dev/null 2>&1; then
     pw useradd fetchbridge -c "fetchbridge daemon" -d /nonexistent -s /usr/sbin/nologin -G media-pipeline
+fi
+[ -d /etc/fetchbridge/conf.d ] || install -d -o root -g fetchbridge -m 0750 /etc/fetchbridge/conf.d
+if [ ! -e /etc/fetchbridge/fetchbridge.conf ]; then
+    install -o root -g fetchbridge -m 0640 {examples}/fetchbridge.conf.example /etc/fetchbridge/fetchbridge.conf
 fi
 for dir in /srv/media-pipeline /srv/media-pipeline/recordings /srv/media-pipeline/incoming; do
     if [ ! -d "$dir" ]; then

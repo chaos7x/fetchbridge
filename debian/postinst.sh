@@ -7,6 +7,22 @@ if ! getent passwd fetchbridge >/dev/null 2>&1; then
         --shell /usr/sbin/nologin fetchbridge
 fi
 
+# fetchbridge.conf/conf.d enthalten keine Secrets, sollen aber nicht fuer
+# jeden lesbar sein. Der Dienst muss die Config nur lesen, nie schreiben:
+# root:fetchbridge 0640 fuer die Datei, 0750 fuer conf.d/ - einheitlich mit
+# tw-recorder. Nur angepasst, solange noch der Paket-Standard (root:root
+# 644/755) vorliegt, eigene Rechte des Admins bleiben bei Upgrades erhalten.
+conf=/etc/fetchbridge/fetchbridge.conf
+if [ -f "$conf" ] && [ "$(stat -c '%U:%G %a' "$conf")" = "root:root 644" ]; then
+    chown root:fetchbridge "$conf"
+    chmod 0640 "$conf"
+fi
+confd=/etc/fetchbridge/conf.d
+if [ -d "$confd" ] && [ "$(stat -c '%U:%G %a' "$confd")" = "root:root 755" ]; then
+    chown root:fetchbridge "$confd"
+    chmod 0750 "$confd"
+fi
+
 # Gemeinsame Gruppe fuer die Uebergabeverzeichnisse der Pipeline
 # (tw-recorder -> fetchbridge -> yt-upload). Jedes der drei .deb-Pakete legt
 # Gruppe und Verzeichnisse unabhaengig und idempotent an, da die Installationsreihenfolge
