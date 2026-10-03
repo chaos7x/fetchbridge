@@ -103,9 +103,10 @@ Das Paket legt einen dedizierten Systemuser (`fetchbridge`) an und startet den D
 systemctl enable --now fetchbridge
 ```
 
-**Devuan / Debian ohne systemd (`sysvinit-core`):** Das Paket bringt zusätzlich ein klassisches `/etc/init.d/fetchbridge`-Skript mit, das `postinst` automatisch anstelle des systemd-Service registriert, wenn kein systemd läuft:
+**Devuan / Debian ohne systemd (`sysvinit-core`, OpenRC):** Das Paket bringt zusätzlich ein klassisches `/etc/init.d/fetchbridge`-Skript mit, das `postinst` automatisch anstelle des systemd-Service registriert, wenn kein systemd läuft - ebenfalls deaktiviert (`update-rc.d … defaults-disabled`, kein Start beim Booten). Die mitgelieferte `.service`-Datei unter `/usr/lib/systemd/system/` bleibt dort einfach ungenutzt liegen, wie bei Debian-Paketen üblich. Aktivieren und starten:
 
 ```bash
+update-rc.d fetchbridge enable
 service fetchbridge start
 ```
 
