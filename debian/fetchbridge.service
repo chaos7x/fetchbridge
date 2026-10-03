@@ -13,23 +13,29 @@ Restart=on-failure
 RestartSec=5
 
 # --- Hardening ---
-# ReadWritePaths deckt genau die beiden Unterverzeichnisse ab, die der Daemon
-# tatsaechlich beschreibt: SOURCE_DIR (cleanup_empty_dirs()' rmdir) und
-# TARGET_DIR (die eigentlichen Verschiebungen/Kopien), sowie
-# /var/log/fetchbridge (Standard-Logpfad, siehe
-# logging_setup._resolve_log_file_path()). Bewusst NICHT das gemeinsame
-# /srv/media-pipeline als Ganzes freigegeben, obwohl fetchbridge per
-# media-pipeline-Gruppenmitgliedschaft ohnehin Schreibrechte auf den
-# gesamten Baum haette (u.a. yt-uploads work/done/corrupt/retry) - das
-# Hardening reduziert den Blast-Radius hier bewusst auf genau das, was der
-# Code tatsaechlich anfasst. Wer abweichende Pfade konfiguriert
-# (LOG_FILE/SOURCE_DIR/TARGET_DIR/...), muss sie hier ergaenzen, sonst
-# schlaegt der jeweilige Schreibzugriff fehl.
+# ReadWritePaths gibt den gemeinsamen Baum /srv/media-pipeline als EINEN
+# Eintrag frei statt SOURCE_DIR und TARGET_DIR einzeln: ProtectSystem=strict
+# setzt jeden ReadWritePaths-Eintrag als eigenen Bind-Mount im Mount-Namespace
+# des Dienstes um, und rename() zwischen zwei verschiedenen Mounts liefert
+# unter Linux EXDEV (errno 18) - auch wenn beide auf derselben Partition
+# liegen. Mit getrennten Eintraegen fiel mover._move_file() deshalb bei JEDER
+# Datei von recordings nach incoming auf Kopieren+Loeschen zurueck.
+# Den Blast-Radius begrenzt stattdessen ReadOnlyPaths auf yt-uploads
+# Arbeitsverzeichnisse (work/done/corrupt/retry), die fetchbridge nie
+# beschreibt; das "-" ignoriert noch nicht angelegte Verzeichnisse. Ein
+# ReadOnlyPaths-Unterverzeichnis stoert rename() zwischen recordings und
+# incoming nicht, weil beide weiterhin auf demselben Mount liegen.
+# /var/log/fetchbridge ist der Standard-Logpfad (siehe
+# logging_setup._resolve_log_file_path()). Wer abweichende Pfade konfiguriert
+# (LOG_FILE/SOURCE_DIR/TARGET_DIR/...), muss sie hier ergaenzen - SOURCE_DIR
+# und TARGET_DIR dabei moeglichst ueber ein gemeinsames Elternverzeichnis,
+# sonst kommt der EXDEV-Fallback zurueck.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/srv/media-pipeline/recordings /srv/media-pipeline/incoming /var/log/fetchbridge
+ReadWritePaths=/srv/media-pipeline /var/log/fetchbridge
+ReadOnlyPaths=-/srv/media-pipeline/work -/srv/media-pipeline/done -/srv/media-pipeline/corrupt -/srv/media-pipeline/retry
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
