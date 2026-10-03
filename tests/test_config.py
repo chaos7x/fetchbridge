@@ -371,3 +371,29 @@ class TestLoadConfig:
         assert cfg["source_dir"] == Path("/from-main")
         assert cfg["target_dir"] != Path("/secret-target")
         assert "secret.conf" in caplog.text
+
+
+class TestConfDFiles:
+    def test_unreadable_conf_d_warns_once_and_is_skipped(self, config, tmp_path, monkeypatch, caplog):
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        (conf_d / "a.conf").write_text("[x]\n")
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+        monkeypatch.setattr(config, "_conf_d_warned", False)
+        monkeypatch.setattr(config.os, "access", lambda *a, **k: False)
+
+        with caplog.at_level("WARNING"):
+            assert config._conf_d_files() == []
+            assert config._conf_d_files() == []
+
+        assert len([r for r in caplog.records if "nicht lesbar" in r.message]) == 1
+
+    def test_readable_conf_d_returns_sorted_files(self, config, tmp_path, monkeypatch):
+        conf_d = tmp_path / "conf.d"
+        conf_d.mkdir()
+        (conf_d / "b.conf").write_text("[x]\n")
+        (conf_d / "a.conf").write_text("[x]\n")
+        (conf_d / "ignored.txt").write_text("")
+        monkeypatch.setattr(config, "CONF_D_DIR", conf_d)
+
+        assert [f.name for f in config._conf_d_files()] == ["a.conf", "b.conf"]
