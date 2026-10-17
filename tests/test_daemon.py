@@ -143,6 +143,32 @@ class TestMkdirGroupWritable:
         finally:
             os.umask(old_umask)
 
+    def test_2775_without_setgid_chmod_under_restrict_suid_sgid(self, daemon, tmp_path, monkeypatch):
+        """
+        Regression: systemd RestrictSUIDSGID=true lehnt chmod() mit Setgid-Bit
+        per seccomp ab (EPERM) - das Verzeichnis muss trotzdem 2775 bekommen
+        (Setgid geerbt vom Elternverzeichnis, g+w über das mkdir() selbst).
+        """
+        parent = tmp_path / "media-pipeline"
+        parent.mkdir()
+        parent.chmod(0o2775)
+        real_chmod = type(parent).chmod
+
+        def restricted_chmod(self, mode, **kwargs):
+            if mode & (stat.S_ISUID | stat.S_ISGID):
+                raise PermissionError("Operation not permitted")
+            return real_chmod(self, mode, **kwargs)
+
+        monkeypatch.setattr(type(parent), "chmod", restricted_chmod)
+        old_umask = os.umask(0o022)
+        try:
+            target = parent / "incoming"
+            daemon._mkdir_group_writable(target)
+            assert stat.S_IMODE(target.stat().st_mode) == 0o2775
+            assert os.umask(0o022) == 0o022  # Prozess-Umask wiederhergestellt
+        finally:
+            os.umask(old_umask)
+
     def test_existing_dir_permissions_are_not_overwritten(self, daemon, tmp_path):
         """Eine bewusste Admin-Anpassung (z.B. chmod 777) darf nicht überschrieben werden."""
         target = tmp_path / "incoming"

@@ -1,6 +1,7 @@
 """Dämon-Modus: Inotify-Überwachung des Quellverzeichnisses, Config-Hot-Reload."""
 
 import logging
+import os
 import signal
 import sys
 import time
@@ -90,9 +91,19 @@ def _mkdir_group_writable(path: Path) -> None:
     wird bewusst NICHT abgefangen - das bleibt Sache der Aufrufer (teils
     fail-fast mit sys.exit(1), teils schon bisher ungefangen).
     """
-    newly_created = not path.is_dir()
-    path.mkdir(parents=True, exist_ok=True)
-    if newly_created:
+    if path.is_dir():
+        return
+    # g+w über ein Umask von 002 beim mkdir() selbst, Setgid erbt das neue
+    # Verzeichnis vom Elternverzeichnis: ein chmod(0o2775) allein scheitert
+    # unter der systemd-Unit (RestrictSUIDSGID=true lehnt jedes chmod() mit
+    # Setgid-Bit per seccomp mit EPERM ab), das Verzeichnis bliebe auf 2755.
+    # chmod daher nur noch als Fallback, falls das Ergebnis trotzdem abweicht.
+    old_umask = os.umask(0o002)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    finally:
+        os.umask(old_umask)
+    if (path.stat().st_mode & 0o7777) != 0o2775:
         try:
             path.chmod(0o2775)
         except OSError as e:
