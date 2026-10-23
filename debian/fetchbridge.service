@@ -34,6 +34,11 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# /run/fetchbridge (dem Dienstuser gehoerend, beim Stoppen wieder entfernt) fuer
+# die Heartbeat-Datei: config.py nimmt es automatisch, sobald es existiert -
+# dann findet auch ein manueller `fetchbridge --healthcheck` ausserhalb des
+# PrivateTmp-Namespace die Datei.
+RuntimeDirectory=fetchbridge
 ReadWritePaths=/srv/media-pipeline /var/log/fetchbridge
 ReadOnlyPaths=-/srv/media-pipeline/work -/srv/media-pipeline/done -/srv/media-pipeline/corrupt -/srv/media-pipeline/retry
 ProtectKernelTunables=true

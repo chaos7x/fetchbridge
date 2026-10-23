@@ -35,13 +35,38 @@ class TestHeartbeatAndHealthcheck:
 
         assert healthcheck.check_healthcheck() == 1
 
-    def test_write_heartbeat_does_not_raise_if_unwritable(self, healthcheck, monkeypatch):
+    def test_write_heartbeat_does_not_raise_if_unwritable(self, healthcheck, tmp_path, monkeypatch):
         """Ein Healthcheck-Problem darf den Dämon nicht zum Absturz bringen."""
-
-        class UnwritablePath:
-            def write_text(self, content):
-                raise OSError("Permission denied")
-
-        monkeypatch.setattr(healthcheck, "HEARTBEAT_FILE", UnwritablePath())
+        monkeypatch.setattr(healthcheck, "HEARTBEAT_FILE", tmp_path / "missing-dir" / "fetchbridge.heartbeat")
 
         healthcheck.write_heartbeat()  # darf nicht raisen
+
+    def test_write_heartbeat_does_not_follow_symlink(self, healthcheck, tmp_path, monkeypatch):
+        victim = tmp_path / "victim"
+        victim.write_text("unverändert")
+        heartbeat_file = tmp_path / "fetchbridge.heartbeat"
+        heartbeat_file.symlink_to(victim)
+        monkeypatch.setattr(healthcheck, "HEARTBEAT_FILE", heartbeat_file)
+
+        healthcheck.write_heartbeat()
+
+        assert victim.read_text() == "unverändert"
+
+    def test_symlinked_heartbeat_is_unhealthy(self, healthcheck, tmp_path, monkeypatch):
+        fresh = tmp_path / "fresh"
+        fresh.write_text(str(time.time()))
+        heartbeat_file = tmp_path / "fetchbridge.heartbeat"
+        heartbeat_file.symlink_to(fresh)
+        monkeypatch.setattr(healthcheck, "HEARTBEAT_FILE", heartbeat_file)
+
+        assert healthcheck.check_healthcheck() == 1
+
+
+class TestDefaultHealthDir:
+    def test_uses_run_dir_if_present(self, healthcheck, monkeypatch):
+        monkeypatch.setattr(healthcheck.os.path, "isdir", lambda p: p == "/var/run/fetchbridge")
+        assert healthcheck._default_health_dir() == "/var/run/fetchbridge"
+
+    def test_falls_back_to_tempdir(self, healthcheck, monkeypatch):
+        monkeypatch.setattr(healthcheck.os.path, "isdir", lambda p: False)
+        assert healthcheck._default_health_dir() == healthcheck.tempfile.gettempdir()
