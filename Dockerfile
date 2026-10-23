@@ -1,9 +1,14 @@
+# Alle FROM-Images sind per Digest gepinnt (Tag bleibt zur Lesbarkeit stehen):
+# ein nachträglich umgebogener Tag auf Docker Hub landet so nicht ungeprüft im
+# Build. Dependabot (docker) schlägt neue Digests/Versionen wöchentlich als PR
+# vor. OS-Security-Patches kommen unabhängig davon weiter über apt-get/apk
+# upgrade beim Build (docker-refresh.yml / os-patch-release.yml).
 # ==========================================
 # STUFE 1: Builder - installiert fetchbridge isoliert per pip
 # ==========================================
 # Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
 # nur das fertig installierte Package wird per COPY --from übernommen.
-FROM debian:trixie-slim AS builder
+FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -37,7 +42,7 @@ COPY --chmod=644 fetchbridge.conf.example /rootfs/etc/fetchbridge/fetchbridge.co
 # ==========================================
 # STUFE 2: FINAL STAGE (schlankes Laufzeit-Image, kein pip/setuptools)
 # ==========================================
-FROM debian:trixie-slim
+FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # Ungepufferte Python-Ausgabe für Docker Logs erzwingen. PYTHONPATH macht das
 # Package unabhängig von distro-spezifischen site-packages-Konventionen
