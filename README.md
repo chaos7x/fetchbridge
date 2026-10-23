@@ -225,7 +225,7 @@ fetchbridge [-h] [-D] [--healthcheck] [-v]
 * `DEBUG` — Standard `0`. Auf `true`/`1` setzen für erweiterte Log-Ausgaben; Alias für `LOG_LEVEL=DEBUG` (dieselbe Variable wie bei `tw-recorder`/`yt-upload`), eine explizit gesetzte `log_level`/`LOG_LEVEL` hat aber immer Vorrang.
 * `LOG_FILE` — Fallback, falls nicht in der Config gesetzt; siehe `[general]`-Sektion oben
 * `CONFIG_CHECK_INTERVAL` — Standard `15` (Sekunden zwischen Hash-Prüfungen der Config-Dateien)
-* `HEARTBEAT_FILE` — Standard `/tmp/fetchbridge.heartbeat`
+* `HEARTBEAT_FILE` — Standard `/var/run/fetchbridge/fetchbridge.heartbeat`, falls das Verzeichnis existiert (legen systemd-Unit, init.d- und rc.d-Skript an), sonst `/tmp/fetchbridge.heartbeat`
 * `HEARTBEAT_MAX_AGE` — Standard `60` (Sekunden, bevor `--healthcheck` als "unhealthy" gilt)
 
 ---
