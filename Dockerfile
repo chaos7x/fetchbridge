@@ -8,7 +8,7 @@
 # ==========================================
 # Eigene Stage, damit pip/setuptools NICHT im finalen Laufzeit-Image landen -
 # nur das fertig installierte Package wird per COPY --from übernommen.
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -42,7 +42,7 @@ COPY --chmod=644 fetchbridge.conf.example /rootfs/etc/fetchbridge/fetchbridge.co
 # ==========================================
 # STUFE 2: FINAL STAGE (schlankes Laufzeit-Image, kein pip/setuptools)
 # ==========================================
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 # Ungepufferte Python-Ausgabe für Docker Logs erzwingen. PYTHONPATH macht das
 # Package unabhängig von distro-spezifischen site-packages-Konventionen
